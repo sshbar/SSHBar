@@ -24,9 +24,9 @@ describe('host sync merge', () => {
   })
 
   it('round-trips the payload, compressing large lists', () => {
-    const small = { v: 1 as const, at: 1, hosts: [h('a', 1)], deleted: {} }
+    const small = { v: 1 as const, at: 1, hosts: [h('a', 1)], deleted: {}, snippets: [], snippetsDeleted: {} }
     expect(encodePayload(small).startsWith('{')).toBe(true)
-    const many = { v: 1 as const, at: 2, hosts: Array.from({ length: 80 }, (_, i) => h(`host-${i}`, i)), deleted: { z: 5 } }
+    const many = { v: 1 as const, at: 2, hosts: Array.from({ length: 80 }, (_, i) => h(`host-${i}`, i)), deleted: { z: 5 }, snippets: [], snippetsDeleted: {} }
     const enc = encodePayload(many)
     expect(enc.startsWith('gz1:')).toBe(true)
     expect(enc.length).toBeLessThan(JSON.stringify(many).length / 3)

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { ProtonPass } from '../src/main/protonpass'
 import { HostStore } from '../src/main/store/hosts'
 import { SettingsStore } from '../src/main/store/settings'
+import { SnippetStore } from '../src/main/store/snippets'
 import { SYNC_FIELD, SYNC_NOTE_TITLE, syncHosts } from '../src/main/sync'
 import { emptyHost } from '../src/shared/defaults'
 
@@ -20,13 +21,13 @@ d('two devices syncing through (fake) Proton Pass', () => {
       const dir = mkdtempSync(join(tmpdir(), 'sb-dev-'))
       const settings = new SettingsStore(dir)
       await settings.update({ sync: { ...settings.get().sync, enabled: true, shareId: 'vault-A' } })
-      return { hosts: new HostStore(dir), settings }
+      return { hosts: new HostStore(dir), settings, snippets: new SnippetStore(dir) }
     }
     const a = await device()
     const b = await device()
 
     const web = await a.hosts.save({ ...emptyHost(), label: 'web', hostname: 'web.example', auth: { ...emptyHost().auth, password: { source: 'protonpass', shareId: 'vault-A', itemId: 'login-1' } } })
-    const r1 = await syncHosts(pp, a.hosts, a.settings)
+    const r1 = await syncHosts(pp, a.hosts, a.settings, a.snippets)
     expect(r1).toMatchObject({ ok: true, pushed: 1 })
     const state = JSON.parse(readFileSync(stateFile, 'utf8'))
     expect(state.items).toHaveLength(1)
@@ -35,21 +36,27 @@ d('two devices syncing through (fake) Proton Pass', () => {
     // no secrets in the payload, only the reference
     expect(state.items[0].extra_fields[0].content.Text).toContain('login-1')
 
-    const r2 = await syncHosts(pp, b.hosts, b.settings)
+    const r2 = await syncHosts(pp, b.hosts, b.settings, b.snippets)
     expect(r2).toMatchObject({ ok: true, pulled: 1 })
     expect(b.hosts.list().map((h) => h.label)).toEqual(['web'])
     expect(b.settings.get().sync.itemId).toBe(a.settings.get().sync.itemId)
 
+    // snippets travel the same way
+    await a.snippets.save({ name: 'uptime', command: 'uptime' })
+    await syncHosts(pp, a.hosts, a.settings, a.snippets)
+    await syncHosts(pp, b.hosts, b.settings, b.snippets)
+    expect(b.snippets.list().map((x) => x.command)).toEqual(['uptime'])
+
     // B adds a host and deletes web; A syncs and sees both changes
     await b.hosts.save({ ...emptyHost(), label: 'db', hostname: 'db.example' })
     await b.hosts.remove(web.id)
-    await syncHosts(pp, b.hosts, b.settings)
-    await syncHosts(pp, a.hosts, a.settings)
+    await syncHosts(pp, b.hosts, b.settings, b.snippets)
+    await syncHosts(pp, a.hosts, a.settings, a.snippets)
     expect(a.hosts.list().map((h) => h.label)).toEqual(['db'])
 
     // idempotent: syncing again without changes doesn't write
     const writesBefore = JSON.parse(readFileSync(stateFile, 'utf8')).log.filter((l: string) => l.startsWith('item update')).length
-    await syncHosts(pp, a.hosts, a.settings)
+    await syncHosts(pp, a.hosts, a.settings, a.snippets)
     const writesAfter = JSON.parse(readFileSync(stateFile, 'utf8')).log.filter((l: string) => l.startsWith('item update')).length
     expect(writesAfter).toBe(writesBefore)
   })

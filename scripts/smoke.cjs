@@ -25,6 +25,14 @@ fs.writeFileSync(path.join(dataDir, 'hosts.json'), JSON.stringify({
     host('h-private', 'private-target', 'Lab', { hostname: 'sb-target', port: 2222, jumpHostId: 'h-test' })
   ]
 }))
+fs.writeFileSync(path.join(dataDir, 'snippets.json'), JSON.stringify({
+  version: 1, deleted: {},
+  snippets: [
+    { id: 's1', name: 'Who am I', command: 'echo SNIPPET-$(whoami)-OK', createdAt: now, updatedAt: now },
+    { id: 's2', name: 'Disk usage by folder', command: 'du -h --max-depth=1 ~ | sort -h', createdAt: now, updatedAt: now },
+    { id: 's3', name: 'Follow syslog', command: 'sudo journalctl -f', createdAt: now, updatedAt: now }
+  ]
+}))
 process.env.SSHBUDDY_DATA_DIR = dataDir
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -153,6 +161,37 @@ app.on('browser-window-created', (_e, win) => {
       await shot('10-ports')
 
       await js(`[...${visibleSession}.querySelectorAll('.session-toolbar .segmented button')].find(b => /Terminal/.test(b.textContent)).click()`)
+
+      // Snippet palette via the real keyboard shortcut, then run a snippet
+      await sleep(400)
+      win.webContents.focus()
+      win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'S', modifiers: ['control', 'shift'] })
+      win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'S', modifiers: ['control', 'shift'] })
+      await waitFor(`document.querySelector('.palette')`, 5000)
+      for (const ch of 'who') win.webContents.sendInputEvent({ type: 'char', keyCode: ch })
+      await sleep(300)
+      await shot('11-snippet-palette')
+      const items = await js(`document.querySelectorAll('.palette-item').length`)
+      if (items !== 1) throw new Error('palette filter shows ' + items + ' items')
+      await js(`document.querySelector('.palette-item.on .btn.primary').click()`)
+      await waitFor(`${visibleSession}.querySelector('.xterm-rows').textContent.includes('SNIPPET-tester-OK')`, 8000)
+
+      // Find in scrollback (Ctrl+Shift+F)
+      win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'F', modifiers: ['control', 'shift'] })
+      win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'F', modifiers: ['control', 'shift'] })
+      await waitFor(`document.querySelector('.term-search input')`, 5000)
+      await sleep(100)
+      for (const ch of 'SNIPPET-tester') win.webContents.sendInputEvent({ type: 'char', keyCode: ch })
+      await sleep(400)
+      const searchOk = await js(`(() => { const i = document.querySelector('.term-search input'); return i.value === 'SNIPPET-tester' && !i.classList.contains('nomatch') })()`)
+      if (!searchOk) throw new Error('terminal search did not find the text')
+      await shot('12-terminal-search')
+      win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' })
+      await sleep(200)
+
+      await js(`[...document.querySelectorAll('.rail-btn')].find(b => /Snippets/.test(b.textContent)).click()`)
+      await sleep(400)
+      await shot('13-snippets')
       await js(`document.querySelectorAll('.rail-btn')[0].click()`)
       await js(`document.querySelector('.btn.primary').click()`) // New host
       await waitFor(`document.querySelector('.modal')`)

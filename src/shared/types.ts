@@ -70,6 +70,17 @@ export interface ForwardState {
 
 export type SecretKind = 'password' | 'key' | 'passphrase'
 
+/** A saved command that can be pasted or run in a terminal. */
+export interface Snippet {
+  id: string
+  name: string
+  command: string
+  createdAt: number
+  updatedAt: number
+}
+
+export type SnippetInput = Pick<Snippet, 'name' | 'command'> & { id?: string }
+
 export interface Settings {
   protonPassCli: string
   protonPassAgentSocket: string

@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes, scrypt as scryptCb } from 'node:crypto'
-import type { Host, SecretKind } from '../shared/types'
+import type { Host, SecretKind, Snippet } from '../shared/types'
 
 /**
  * The encrypted sync file: a small JSON envelope around an AES-256-GCM ciphertext. The key is
@@ -36,6 +36,8 @@ export interface VaultPayload {
   deleted: Record<string, number>
   /** hostId -> saved secrets (only when "include secrets" is on) */
   secrets: Record<string, HostSecrets>
+  snippets: Snippet[]
+  snippetsDeleted: Record<string, number>
 }
 
 export class WrongPasswordError extends Error {
@@ -101,6 +103,8 @@ export function decryptVault(e: VaultEnvelope, key: Buffer): VaultPayload {
     at: Number(raw.at) || 0,
     hosts: Array.isArray(raw.hosts) ? raw.hosts : [],
     deleted: raw.deleted && typeof raw.deleted === 'object' ? raw.deleted : {},
-    secrets: raw.secrets && typeof raw.secrets === 'object' ? raw.secrets : {}
+    secrets: raw.secrets && typeof raw.secrets === 'object' ? raw.secrets : {},
+    snippets: Array.isArray(raw.snippets) ? raw.snippets : [],
+    snippetsDeleted: raw.snippetsDeleted && typeof raw.snippetsDeleted === 'object' ? raw.snippetsDeleted : {}
   }
 }

@@ -1,7 +1,8 @@
 import { gunzipSync, gzipSync } from 'node:zlib'
-import type { Host, SyncResult } from '../shared/types'
+import type { Host, Snippet, SyncResult } from '../shared/types'
 import type { HostStore } from './store/hosts'
 import { sanitizeHost } from './store/hosts'
+import { sanitizeSnippet, type SnippetStore } from './store/snippets'
 import type { SettingsStore } from './store/settings'
 import type { ProtonPass } from './protonpass'
 
@@ -20,6 +21,8 @@ export interface SyncPayload {
   at: number
   hosts: Host[]
   deleted: Record<string, number>
+  snippets: Snippet[]
+  snippetsDeleted: Record<string, number>
 }
 
 export function encodePayload(p: SyncPayload): string {
@@ -29,7 +32,7 @@ export function encodePayload(p: SyncPayload): string {
 }
 
 export function decodePayload(s: string | undefined): SyncPayload {
-  if (!s) return { v: 1, at: 0, hosts: [], deleted: {} }
+  if (!s) return { v: 1, at: 0, hosts: [], deleted: {}, snippets: [], snippetsDeleted: {} }
   const json = s.startsWith('gz1:') ? gunzipSync(Buffer.from(s.slice(4), 'base64')).toString('utf8') : s
   const raw = JSON.parse(json) as Partial<SyncPayload>
   const hosts: Host[] = []
@@ -40,7 +43,60 @@ export function decodePayload(s: string | undefined): SyncPayload {
       /* skip invalid */
     }
   }
-  return { v: 1, at: Number(raw.at) || 0, hosts, deleted: raw.deleted && typeof raw.deleted === 'object' ? raw.deleted : {} }
+  return {
+    v: 1,
+    at: Number(raw.at) || 0,
+    hosts,
+    deleted: raw.deleted && typeof raw.deleted === 'object' ? raw.deleted : {},
+    snippets: sanitizeSnippets(raw.snippets),
+    snippetsDeleted: raw.snippetsDeleted && typeof raw.snippetsDeleted === 'object' ? raw.snippetsDeleted : {}
+  }
+}
+
+export function sanitizeSnippets(list: unknown): Snippet[] {
+  const out: Snippet[] = []
+  for (const s of Array.isArray(list) ? list : []) {
+    try {
+      out.push(sanitizeSnippet(s as Snippet))
+    } catch {
+      /* skip invalid */
+    }
+  }
+  return out
+}
+
+interface Versioned {
+  id: string
+  createdAt: number
+  updatedAt: number
+}
+
+/** Last-writer-wins merge of two record sets with deletion tombstones (expired after 180 days). */
+export function mergeRecords<T extends Versioned>(
+  a: { items: T[]; deleted: Record<string, number> },
+  b: { items: T[]; deleted: Record<string, number> },
+  now = Date.now()
+): { items: T[]; deleted: Record<string, number> } {
+  const deleted: Record<string, number> = {}
+  for (const src of [a.deleted, b.deleted]) {
+    for (const [id, at] of Object.entries(src)) {
+      if (typeof at === 'number' && now - at < TOMBSTONE_TTL_MS) deleted[id] = Math.max(deleted[id] ?? 0, at)
+    }
+  }
+  const byId = new Map<string, T>()
+  for (const r of [...a.items, ...b.items]) {
+    const cur = byId.get(r.id)
+    if (!cur || r.updatedAt > cur.updatedAt) byId.set(r.id, r)
+  }
+  const items: T[] = []
+  for (const r of byId.values()) {
+    const del = deleted[r.id]
+    if (del !== undefined && del >= r.updatedAt) continue
+    if (del !== undefined) delete deleted[r.id]
+    items.push(r)
+  }
+  items.sort((x, y) => x.createdAt - y.createdAt)
+  return { items, deleted }
 }
 
 export function mergeHosts(
@@ -48,26 +104,12 @@ export function mergeHosts(
   b: { hosts: Host[]; deleted: Record<string, number> },
   now = Date.now()
 ): { hosts: Host[]; deleted: Record<string, number> } {
-  const deleted: Record<string, number> = {}
-  for (const src of [a.deleted, b.deleted]) {
-    for (const [id, at] of Object.entries(src)) {
-      if (typeof at === 'number' && now - at < TOMBSTONE_TTL_MS) deleted[id] = Math.max(deleted[id] ?? 0, at)
-    }
-  }
-  const byId = new Map<string, Host>()
-  for (const h of [...a.hosts, ...b.hosts]) {
-    const cur = byId.get(h.id)
-    if (!cur || h.updatedAt > cur.updatedAt) byId.set(h.id, h)
-  }
-  const hosts: Host[] = []
-  for (const h of byId.values()) {
-    const del = deleted[h.id]
-    if (del !== undefined && del >= h.updatedAt) continue
-    if (del !== undefined) delete deleted[h.id]
-    hosts.push(h)
-  }
-  hosts.sort((x, y) => x.createdAt - y.createdAt)
-  return { hosts, deleted }
+  const r = mergeRecords({ items: a.hosts, deleted: a.deleted }, { items: b.hosts, deleted: b.deleted }, now)
+  return { hosts: r.items, deleted: r.deleted }
+}
+
+export function recordsFingerprint(items: Versioned[], deleted: Record<string, number>): string {
+  return JSON.stringify([[...items].sort((x, y) => x.id.localeCompare(y.id)).map((r) => `${r.id}@${r.updatedAt}`), Object.keys(deleted).sort()])
 }
 
 function fingerprintOf(s: { hosts: Host[]; deleted: Record<string, number> }): string {
@@ -85,7 +127,7 @@ export function countDiff(from: { hosts: Host[] }, to: { hosts: Host[] }): numbe
   return n
 }
 
-export async function syncHosts(pp: ProtonPass, hosts: HostStore, settings: SettingsStore): Promise<SyncResult> {
+export async function syncHosts(pp: ProtonPass, hosts: HostStore, settings: SettingsStore, snippets?: SnippetStore): Promise<SyncResult> {
   const s = settings.get().sync
   const at = Date.now()
   if (!s.shareId) return { ok: false, message: 'Choose a Proton Pass vault for sync first', pulled: 0, pushed: 0, at }
@@ -116,15 +158,22 @@ export async function syncHosts(pp: ProtonPass, hosts: HostStore, settings: Sett
     const merged = mergeHosts(local, remote, at)
     const pulled = countDiff(local, merged)
     const pushed = countDiff(remote, merged)
+    const localSnips = { items: snippets?.list() ?? [], deleted: snippets?.tombstones() ?? {} }
+    const snips = mergeRecords(localSnips, { items: remote.snippets, deleted: remote.snippetsDeleted }, at)
+    const snipsChangedRemote = recordsFingerprint(snips.items, snips.deleted) !== recordsFingerprint(remote.snippets, remote.snippetsDeleted)
 
-    if (fingerprintOf(merged) !== fingerprintOf(remote) || !raw) {
-      await pp.writeField(s.shareId, itemId, SYNC_FIELD, encodePayload({ v: 1, at, ...merged }))
+    if (fingerprintOf(merged) !== fingerprintOf(remote) || (snippets && snipsChangedRemote) || !raw) {
+      const payload: SyncPayload = { v: 1, at, ...merged, snippets: snippets ? snips.items : remote.snippets, snippetsDeleted: snippets ? snips.deleted : remote.snippetsDeleted }
+      await pp.writeField(s.shareId, itemId, SYNC_FIELD, encodePayload(payload))
     }
     if (fingerprintOf(merged) !== fingerprintOf(local)) {
       await hosts.replaceAll(merged.hosts, merged.deleted)
     }
+    if (snippets && recordsFingerprint(snips.items, snips.deleted) !== recordsFingerprint(localSnips.items, localSnips.deleted)) {
+      await snippets.replaceAll(snips.items, snips.deleted)
+    }
     await settings.update({ sync: { ...s, itemId, lastSyncAt: at, lastError: '' } })
-    return { ok: true, message: `Synced ${merged.hosts.length} hosts`, pulled, pushed, at }
+    return { ok: true, message: `Synced ${merged.hosts.length} hosts, ${snips.items.length} snippets`, pulled, pushed, at }
   } catch (e) {
     const message = (e as Error).message
     await settings.update({ sync: { ...s, lastError: message } })

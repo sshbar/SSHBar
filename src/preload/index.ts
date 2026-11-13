@@ -25,6 +25,13 @@ const api: SSHBuddyApi = {
     onChanged: (cb) => on('hosts:changed', cb)
   },
 
+  snippets: {
+    list: () => invoke('snippets:list'),
+    save: (s) => invoke('snippets:save', s),
+    remove: (id) => invoke('snippets:remove', id),
+    onChanged: (cb) => on('snippets:changed', cb)
+  },
+
   secrets: {
     backend: () => invoke('secrets:backend'),
     set: (hostId, kind, value) => invoke('secrets:set', hostId, kind, value),

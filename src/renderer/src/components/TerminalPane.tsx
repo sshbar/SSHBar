@@ -1,10 +1,12 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Terminal, type ITheme } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
+import { SearchAddon } from '@xterm/addon-search'
+import { ArrowDown, ArrowUp, CaseSensitive, X } from 'lucide-react'
 import { api } from '../api'
 import { useStore } from '../store'
-import { attachTerminal } from '../terminalBus'
+import { attachTerminal, registerTerminalControls } from '../terminalBus'
 
 const THEME: ITheme = {
   background: '#0d1016',
@@ -36,6 +38,14 @@ export function TerminalPane({ sessionId, visible }: { sessionId: string; visibl
   const fitRef = useRef<FitAddon | null>(null)
   const settings = useStore((s) => s.settings)
   const status = useStore((s) => s.sessions[sessionId]?.status)
+  const searchRef = useRef<SearchAddon | null>(null)
+  const [search, setSearch] = useState<{ open: boolean; q: string; caseSensitive: boolean; found: boolean | null }>({
+    open: false,
+    q: '',
+    caseSensitive: false,
+    found: null
+  })
+  const searchInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const el = ref.current
@@ -60,9 +70,16 @@ export function TerminalPane({ sessionId, visible }: { sessionId: string; visibl
         if (ev.ctrlKey || ev.metaKey) void api.openExternal(uri)
       })
     )
+    const searchAddon = new SearchAddon()
+    term.loadAddon(searchAddon)
+    searchRef.current = searchAddon
     term.open(el)
     termRef.current = term
     fitRef.current = fit
+    const unregister = registerTerminalControls(sessionId, {
+      paste: (text) => term.paste(text),
+      focus: () => term.focus()
+    })
 
     const isMac = api.platform === 'darwin'
     term.attachCustomKeyEventHandler((e) => {
@@ -78,6 +95,17 @@ export function TerminalPane({ sessionId, visible }: { sessionId: string; visibl
       }
       if (paste) {
         void api.clipboard.read().then((t) => t && term.paste(t))
+        return false
+      }
+      // Find: Ctrl+Shift+F (Cmd+F on macOS)
+      if (isMac ? e.metaKey && !e.shiftKey && k === 'f' : e.ctrlKey && e.shiftKey && k === 'f') {
+        setSearch((s) => ({ ...s, open: true }))
+        requestAnimationFrame(() => searchInput.current?.select())
+        return false
+      }
+      // Snippets: Ctrl+Shift+S (Cmd+Shift+S on macOS)
+      if ((isMac ? e.metaKey : e.ctrlKey) && e.shiftKey && k === 's') {
+        useStore.getState().openPalette(sessionId)
         return false
       }
       // let the app handle tab shortcuts
@@ -126,6 +154,7 @@ export function TerminalPane({ sessionId, visible }: { sessionId: string; visibl
       binSub.dispose()
       resizeSub.dispose()
       detach()
+      unregister()
       term.dispose()
       termRef.current = null
     }
@@ -161,5 +190,63 @@ export function TerminalPane({ sessionId, visible }: { sessionId: string; visibl
     return () => cancelAnimationFrame(frame)
   }, [status, visible])
 
-  return <div className="terminal-host" ref={ref} />
+  const find = (dir: 'next' | 'prev', q = search.q, caseSensitive = search.caseSensitive): void => {
+    const addon = searchRef.current
+    if (!addon || !q) return setSearch((s) => ({ ...s, found: null }))
+    const found = dir === 'next' ? addon.findNext(q, { caseSensitive }) : addon.findPrevious(q, { caseSensitive })
+    setSearch((s) => ({ ...s, found }))
+  }
+
+  const closeSearch = (): void => {
+    searchRef.current?.clearDecorations()
+    termRef.current?.clearSelection()
+    setSearch((s) => ({ ...s, open: false, found: null }))
+    termRef.current?.focus()
+  }
+
+  return (
+    <div className="terminal-wrap">
+      <div className="terminal-host" ref={ref} />
+      {search.open && (
+        <div className="term-search" onKeyDown={(e) => e.stopPropagation()}>
+          <input
+            ref={searchInput}
+            autoFocus
+            placeholder="Find in terminal"
+            value={search.q}
+            className={search.found === false ? 'nomatch' : ''}
+            onChange={(e) => {
+              const q = e.target.value
+              setSearch((s) => ({ ...s, q }))
+              find('next', q)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') find(e.shiftKey ? 'prev' : 'next')
+              if (e.key === 'Escape') closeSearch()
+            }}
+          />
+          <button
+            className={`icon-btn ${search.caseSensitive ? 'on' : ''}`}
+            title="Match case"
+            onClick={() => {
+              const cs = !search.caseSensitive
+              setSearch((s) => ({ ...s, caseSensitive: cs }))
+              find('next', search.q, cs)
+            }}
+          >
+            <CaseSensitive size={15} />
+          </button>
+          <button className="icon-btn" title="Previous (Shift+Enter)" onClick={() => find('prev')}>
+            <ArrowUp size={14} />
+          </button>
+          <button className="icon-btn" title="Next (Enter)" onClick={() => find('next')}>
+            <ArrowDown size={14} />
+          </button>
+          <button className="icon-btn" title="Close (Esc)" onClick={closeSearch}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
+    </div>
+  )
 }

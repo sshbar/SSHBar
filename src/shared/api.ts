@@ -17,6 +17,8 @@ import type {
   SecretBackendInfo,
   SecretKind,
   SessionEvent,
+  Snippet,
+  SnippetInput,
   Settings,
   SyncResult,
   TransferInfo
@@ -37,6 +39,13 @@ export interface SSHBuddyApi {
     exportJson(): Promise<boolean>
     importJson(): Promise<ImportResult>
     onChanged(cb: (hosts: Host[]) => void): Unsubscribe
+  }
+
+  snippets: {
+    list(): Promise<Snippet[]>
+    save(s: SnippetInput): Promise<Snippet>
+    remove(id: string): Promise<void>
+    onChanged(cb: (s: Snippet[]) => void): Unsubscribe
   }
 
   secrets: {

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { LoaderCircle, Server, Settings as SettingsIcon, SquareTerminal, X } from 'lucide-react'
+import { Braces, LoaderCircle, Server, Settings as SettingsIcon, SquareTerminal, X } from 'lucide-react'
 import { useStore } from './store'
 import { HostsView } from './components/HostsView'
 import { HostEditor } from './components/HostEditor'
@@ -9,6 +9,8 @@ import { StatsBar } from './components/StatsBar'
 import { PromptDialog } from './components/PromptDialog'
 import { Toasts } from './components/Toasts'
 import { StatusDot } from './components/StatusDot'
+import { SnippetsView } from './components/SnippetsView'
+import { SnippetPalette } from './components/SnippetPalette'
 
 export function App() {
   const ready = useStore((s) => s.ready)
@@ -62,6 +64,10 @@ export function App() {
           <Server size={19} />
           <span>Hosts</span>
         </button>
+        <button className={`rail-btn ${active === 'snippets' ? 'on' : ''}`} onClick={() => setActive('snippets')} title="Snippets">
+          <Braces size={19} />
+          <span>Snippets</span>
+        </button>
         <div className="rail-spacer" />
         <button className={`rail-btn ${active === 'settings' ? 'on' : ''}`} onClick={() => setActive('settings')} title="Settings">
           <SettingsIcon size={19} />
@@ -71,9 +77,9 @@ export function App() {
 
       <div className="main">
         <div className="tabbar">
-          <button className={`tab tab-home ${active === 'hosts' || active === 'settings' ? 'on' : ''}`} onClick={() => setActive('hosts')}>
-            {active === 'settings' ? <SettingsIcon size={14} /> : <Server size={14} />}
-            <span>{active === 'settings' ? 'Settings' : 'Hosts'}</span>
+          <button className={`tab tab-home ${['hosts', 'snippets', 'settings'].includes(active) ? 'on' : ''}`} onClick={() => setActive('hosts')}>
+            {active === 'settings' ? <SettingsIcon size={14} /> : active === 'snippets' ? <Braces size={14} /> : <Server size={14} />}
+            <span>{active === 'settings' ? 'Settings' : active === 'snippets' ? 'Snippets' : 'Hosts'}</span>
           </button>
           {tabs.map((id) => {
             const s = sessions[id]
@@ -105,6 +111,7 @@ export function App() {
 
         <div className="content">
           {active === 'hosts' && <HostsView />}
+          {active === 'snippets' && <SnippetsView />}
           {active === 'settings' && <SettingsView />}
           {tabs.map((id) => (
             <SessionView key={id} id={id} visible={active === id} />
@@ -116,6 +123,7 @@ export function App() {
 
       {editor && <HostEditor initial={editor} />}
       <PromptDialog />
+      <SnippetPalette />
       <Toasts />
     </div>
   )

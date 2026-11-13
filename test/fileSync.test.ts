@@ -6,6 +6,7 @@ import { FileSync, MASTER_PASSWORD_ID } from '../src/main/fileSync'
 import { HostStore } from '../src/main/store/hosts'
 import { SecretStore, type Cipher } from '../src/main/store/secrets'
 import { SettingsStore } from '../src/main/store/settings'
+import { SnippetStore } from '../src/main/store/snippets'
 import { WrongPasswordError, decryptVault, deriveKey, encryptVault, newKdf, parseEnvelope } from '../src/main/vaultFile'
 import { emptyHost } from '../src/shared/defaults'
 
@@ -23,9 +24,10 @@ function device(dir = mkdtempSync(join(tmpdir(), 'sb-dev-'))) {
   const hosts = new HostStore(dir)
   const secrets = new SecretStore(dir, cipher)
   const settings = new SettingsStore(dir)
-  const sync = new FileSync({ hosts, secrets, settings, onStatus: () => undefined, kdfN: 2 ** 14 })
+  const snippets = new SnippetStore(dir)
+  const sync = new FileSync({ hosts, secrets, settings, snippets, onStatus: () => undefined, kdfN: 2 ** 14 })
   devices.push(sync)
-  return { dir, hosts, secrets, settings, sync }
+  return { dir, hosts, secrets, settings, snippets, sync }
 }
 
 const until = async (fn: () => boolean, ms = 6000): Promise<void> => {
@@ -42,7 +44,7 @@ describe('vault file crypto', () => {
   it('round-trips and detects wrong passwords and tampering', async () => {
     const kdf = newKdf(2 ** 14)
     const key = await deriveKey('pw-1234567', kdf)
-    const env = encryptVault({ v: 1, at: 1, hosts: [], deleted: { x: 1 }, secrets: { h: { password: 'hunter2' } } }, key, kdf)
+    const env = encryptVault({ v: 1, at: 1, hosts: [], deleted: { x: 1 }, secrets: { h: { password: 'hunter2' } }, snippets: [], snippetsDeleted: {} }, key, kdf)
     expect(JSON.stringify(env)).not.toContain('hunter2')
     expect(decryptVault(parseEnvelope(JSON.stringify(env)), key).secrets.h.password).toBe('hunter2')
     await expect(deriveKey('wrong-pass', kdf).then((k) => decryptVault(env, k))).rejects.toBeInstanceOf(WrongPasswordError)
@@ -138,6 +140,20 @@ describe('encrypted sync file across devices', () => {
     await b.sync.sync()
     expect(b.hosts.get(webId)?.label).toBe('web-renamed-by-d')
     expect(await b.secrets.get(webId, 'key')).toBe('KEY-MATERIAL')
+  })
+
+  it('syncs snippets, including edits and deletions', async () => {
+    const s1 = await a.snippets.save({ name: 'disk', command: 'df -h' })
+    const s2 = await a.snippets.save({ name: 'logs', command: 'journalctl -f' })
+    await a.sync.sync()
+    await b.sync.sync()
+    expect(b.snippets.list().map((s) => s.command).sort()).toEqual(['df -h', 'journalctl -f'])
+    await b.snippets.save({ ...s1, command: 'df -hT' })
+    await b.snippets.remove(s2.id)
+    await b.sync.sync()
+    await a.sync.sync()
+    expect(a.snippets.list().map((s) => s.command)).toEqual(['df -hT'])
+    expect(readFileSync(path, 'utf8')).not.toContain('df -hT')
   })
 
   it('picks up changes written by another device automatically', async () => {

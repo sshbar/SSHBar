@@ -7,7 +7,8 @@ import { sanitizeHost } from './store/hosts'
 import type { SecretStore } from './store/secrets'
 import type { SettingsStore } from './store/settings'
 import { writeJson } from './store/jsonFile'
-import { countDiff, mergeHosts } from './sync'
+import { countDiff, mergeHosts, mergeRecords, recordsFingerprint, sanitizeSnippets } from './sync'
+import type { SnippetStore } from './store/snippets'
 import {
   WrongPasswordError,
   decryptVault,
@@ -36,6 +37,7 @@ export interface FileSyncDeps {
   hosts: HostStore
   secrets: SecretStore
   settings: SettingsStore
+  snippets?: SnippetStore
   onStatus(s: FileSyncStatus): void
   /** scrypt cost for newly created files (tests use a cheaper value) */
   kdfN?: number
@@ -53,10 +55,11 @@ function canon(v: unknown): string {
   return JSON.stringify(v) ?? 'null'
 }
 
-function digest(p: Pick<VaultPayload, 'hosts' | 'deleted' | 'secrets'>): string {
+function digest(p: Pick<VaultPayload, 'hosts' | 'deleted' | 'secrets'> & Partial<Pick<VaultPayload, 'snippets' | 'snippetsDeleted'>>): string {
   const hosts = [...p.hosts].sort((a, b) => a.id.localeCompare(b.id))
   const secrets = Object.fromEntries(Object.entries(p.secrets).filter(([, s]) => Object.keys(s).length))
-  return createHash('sha256').update(canon({ hosts, deleted: p.deleted, secrets })).digest('hex')
+  const snippets = [...(p.snippets ?? [])].sort((a, b) => a.id.localeCompare(b.id))
+  return createHash('sha256').update(canon({ hosts, deleted: p.deleted, secrets, snippets, snippetsDeleted: p.snippetsDeleted ?? {} })).digest('hex')
 }
 
 const sha = (s: string): string => createHash('sha256').update(s).digest('hex')
@@ -219,7 +222,7 @@ export class FileSync {
         if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e
       }
 
-      let remote: VaultPayload = { v: 1, at: 0, hosts: [], deleted: {}, secrets: {} }
+      let remote: VaultPayload = { v: 1, at: 0, hosts: [], deleted: {}, secrets: {}, snippets: [], snippetsDeleted: {} }
       let kdf: KdfParams
       let key: Buffer
       if (text !== undefined) {
@@ -236,6 +239,7 @@ export class FileSync {
           }
         }
         remote.hosts = clean
+        remote.snippets = sanitizeSnippets(remote.snippets)
       } else {
         kdf = newKdf(this.deps.kdfN)
         key = await this.keyFor(kdf)
@@ -246,6 +250,11 @@ export class FileSync {
       const local = { hosts: localHosts, deleted: this.deps.hosts.tombstones() }
       const mine = include ? await this.localSecrets(localHosts) : {}
       const merged = mergeHosts(local, remote, at)
+      const snipStore = this.deps.snippets
+      const localSnips = { items: snipStore?.list() ?? [], deleted: snipStore?.tombstones() ?? {} }
+      const snips = snipStore
+        ? mergeRecords(localSnips, { items: remote.snippets, deleted: remote.snippetsDeleted }, at)
+        : { items: remote.snippets, deleted: remote.snippetsDeleted }
 
       // secrets follow the winning version of each host; on a tie (same version) keep the union
       const localById = new Map(localHosts.map((h) => [h.id, h]))
@@ -269,6 +278,9 @@ export class FileSync {
         if (digest({ hosts: merged.hosts, deleted: merged.deleted, secrets: {} }) !== localFp) {
           await this.deps.hosts.replaceAll(merged.hosts, merged.deleted)
         }
+        if (snipStore && recordsFingerprint(snips.items, snips.deleted) !== recordsFingerprint(localSnips.items, localSnips.deleted)) {
+          await snipStore.replaceAll(snips.items, snips.deleted)
+        }
         const mergedIds = new Set(merged.hosts.map((h) => h.id))
         for (const id of localById.keys()) if (!mergedIds.has(id)) await this.deps.secrets.removeHost(id)
         if (include && (await this.deps.secrets.backend()).available) {
@@ -287,7 +299,7 @@ export class FileSync {
       }
 
       // write the file only when its content would change (or to re-key it)
-      const payload: VaultPayload = { v: 1, at, hosts: merged.hosts, deleted: merged.deleted, secrets }
+      const payload: VaultPayload = { v: 1, at, hosts: merged.hosts, deleted: merged.deleted, secrets, snippets: snips.items, snippetsDeleted: snips.deleted }
       if (text === undefined || this.rekey || digest(payload) !== digest(remote)) {
         if (this.rekey) {
           kdf = this.rekey.kdf

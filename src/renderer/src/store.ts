@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { FileSyncStatus, ForwardState, Host, HostInput, HostStats, PromptRequest, SessionStatus, Settings, TransferInfo } from '../../shared/types'
+import type { FileSyncStatus, ForwardState, Host, HostInput, HostStats, PromptRequest, SessionStatus, Settings, Snippet, TransferInfo } from '../../shared/types'
 import { api } from './api'
 import { disposeTerminal, pushTerminalData } from './terminalBus'
 import { errorText } from './format'
@@ -27,7 +27,7 @@ export interface Toast {
   text: string
 }
 
-type Page = 'hosts' | 'settings'
+type Page = 'hosts' | 'snippets' | 'settings'
 
 interface State {
   ready: boolean
@@ -41,8 +41,12 @@ interface State {
   toasts: Toast[]
   editor: HostInput | null
   fileSync: FileSyncStatus | null
+  snippets: Snippet[]
+  /** session whose snippet palette is open */
+  palette: string | null
 
   init(): Promise<void>
+  openPalette(sessionId: string | null): void
   setActive(id: Page | string): void
   connect(hostId: string): Promise<void>
   reconnect(sessionId: string): Promise<void>
@@ -72,13 +76,19 @@ export const useStore = create<State>((set, get) => ({
   toasts: [],
   editor: null,
   fileSync: null,
+  snippets: [],
+  palette: null,
+
+  openPalette(sessionId) {
+    set({ palette: sessionId })
+  },
 
   init() {
     // React StrictMode runs effects twice in development: subscribe exactly once,
     // otherwise every terminal chunk and every prompt would be delivered twice.
     initOnce ??= (async () => {
-      const [hosts, settings, fileSync] = await Promise.all([api.hosts.list(), api.settings.get(), api.fileSync.status()])
-      set({ hosts, settings, fileSync, ready: true })
+      const [hosts, settings, fileSync, snippets] = await Promise.all([api.hosts.list(), api.settings.get(), api.fileSync.status(), api.snippets.list()])
+      set({ hosts, settings, fileSync, snippets, ready: true })
       subscribe()
     })()
     return initOnce
@@ -88,6 +98,7 @@ export const useStore = create<State>((set, get) => ({
     api.hosts.onChanged((hosts) => set({ hosts }))
     api.settings.onChanged((settings) => set({ settings }))
     api.fileSync.onStatus((fileSync) => set({ fileSync }))
+    api.snippets.onChanged((snippets) => set({ snippets }))
 
     api.ssh.onEvent((ev) => {
       if (ev.type === 'data') return pushTerminalData(ev.sessionId, ev.data)

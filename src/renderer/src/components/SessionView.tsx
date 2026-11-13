@@ -1,4 +1,4 @@
-import { ArrowRightLeft, FolderOpen, LoaderCircle, Pencil, RotateCw, SquareTerminal, TriangleExclamationPoint, Unplug } from 'lucide-react'
+import { ArrowRightLeft, Braces, FolderOpen, LoaderCircle, Pencil, RotateCw, SquareTerminal, TriangleExclamationPoint, Unplug } from 'lucide-react'
 import { useStore } from '../store'
 import { TerminalPane } from './TerminalPane'
 import { FileManager } from './FileManager'
@@ -35,6 +35,17 @@ export function SessionView({ id, visible }: { id: string; visible: boolean }) {
           <b>{s.label}</b> <span className="muted">{s.subtitle}</span>
         </div>
         <div className="grow" />
+        <button
+          className="btn sm"
+          disabled={!connected}
+          title={`Snippets (${api.platform === 'darwin' ? '⌘' : 'Ctrl'}+Shift+S)`}
+          onClick={() => {
+            setView(id, 'terminal')
+            useStore.getState().openPalette(id)
+          }}
+        >
+          <Braces size={13} /> Snippets
+        </button>
         {ended ? (
           <button className="btn sm primary" onClick={() => void reconnect(id)}>
             <RotateCw size={13} /> Reconnect

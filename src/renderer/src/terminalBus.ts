@@ -27,3 +27,22 @@ export function disposeTerminal(sessionId: string): void {
   sinks.delete(sessionId)
   pending.delete(sessionId)
 }
+
+/** Controls of a mounted terminal, used by the snippet palette and keyboard shortcuts. */
+export interface TerminalControls {
+  paste(text: string): void
+  focus(): void
+}
+
+const controls = new Map<string, TerminalControls>()
+
+export function registerTerminalControls(sessionId: string, c: TerminalControls): () => void {
+  controls.set(sessionId, c)
+  return () => {
+    if (controls.get(sessionId) === c) controls.delete(sessionId)
+  }
+}
+
+export function terminalControls(sessionId: string): TerminalControls | undefined {
+  return controls.get(sessionId)
+}

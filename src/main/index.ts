@@ -26,6 +26,7 @@ import { localList, localMkdir, localRename, localRoots } from './localfs'
 import { hostsFromSshConfig, parseSshConfig } from './sshconfig'
 import { syncHosts } from './sync'
 import { FileSync } from './fileSync'
+import { SnippetStore } from './store/snippets'
 
 // ---------------------------------------------------------------------------
 // Bootstrapping
@@ -65,6 +66,7 @@ const dataDir = app.getPath('userData')
 const hosts = new HostStore(dataDir)
 const secrets = new SecretStore(dataDir, cipher)
 const settings = new SettingsStore(dataDir)
+const snippets = new SnippetStore(dataDir)
 const knownHosts = new KnownHostsStore(dataDir, [join(homedir(), '.ssh', 'known_hosts'), join(homedir(), '.ssh', 'known_hosts2')])
 const protonPass = new ProtonPass(() => settings.get().protonPassCli)
 const sessions = new Map<string, SshSession>()
@@ -157,7 +159,7 @@ async function runSync() {
   if (syncing) return { ok: false, message: 'Sync already in progress', pulled: 0, pushed: 0, at: Date.now() }
   syncing = true
   try {
-    const res = await syncHosts(protonPass, hosts, settings)
+    const res = await syncHosts(protonPass, hosts, settings, snippets)
     send('settings:changed', settings.get())
     return res
   } finally {
@@ -165,17 +167,27 @@ async function runSync() {
   }
 }
 
-const fileSync = new FileSync({ hosts, secrets, settings, onStatus: (s) => send('fileSync:status', s) })
+const fileSync = new FileSync({ hosts, secrets, settings, snippets, onStatus: (s) => send('fileSync:status', s) })
 secrets.onChange(() => {
   if (!fileSync.applying) fileSync.scheduleSync()
 })
 
-hosts.onChange((list) => {
-  send('hosts:changed', list)
-  if (!fileSync.applying) fileSync.scheduleSync()
+function scheduleProtonPassSync(): void {
   if (syncing || !settings.get().sync.enabled) return
   if (syncTimer) clearTimeout(syncTimer)
   syncTimer = setTimeout(() => void runSync(), 3000)
+}
+
+hosts.onChange((list) => {
+  send('hosts:changed', list)
+  if (!fileSync.applying) fileSync.scheduleSync()
+  scheduleProtonPassSync()
+})
+
+snippets.onChange((list) => {
+  send('snippets:changed', list)
+  if (!fileSync.applying) fileSync.scheduleSync()
+  scheduleProtonPassSync()
 })
 
 // ---------------------------------------------------------------------------
@@ -295,6 +307,11 @@ function registerIpc(): void {
     }
     return { added, skipped }
   })
+
+  // ----- snippets -----
+  handle('snippets:list', () => snippets.list())
+  handle('snippets:save', (s: { id?: string; name: string; command: string }) => snippets.save(s))
+  handle('snippets:remove', (id: string) => snippets.remove(str(id)))
 
   // ----- secrets (write-only from the renderer's point of view) -----
   handle('secrets:backend', () => secrets.backend())
