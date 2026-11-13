@@ -1,0 +1,116 @@
+import type {
+  DirListing,
+  Host,
+  HostInput,
+  ImportResult,
+  KnownHostEntry,
+  LocalRoots,
+  PPAgentStatus,
+  PPItem,
+  PPStatus,
+  PPVault,
+  PromptRequest,
+  PromptResponse,
+  SecretBackendInfo,
+  SecretKind,
+  SessionEvent,
+  Settings,
+  SyncResult,
+  TransferInfo
+} from './types'
+
+export type Unsubscribe = () => void
+
+/** The API the preload script exposes to the renderer as `window.sshbuddy`. */
+export interface SSHBuddyApi {
+  platform: string
+
+  hosts: {
+    list(): Promise<Host[]>
+    save(host: HostInput): Promise<Host>
+    remove(id: string): Promise<void>
+    duplicate(id: string): Promise<Host>
+    importSshConfig(): Promise<ImportResult>
+    exportJson(): Promise<boolean>
+    importJson(): Promise<ImportResult>
+    onChanged(cb: (hosts: Host[]) => void): Unsubscribe
+  }
+
+  secrets: {
+    backend(): Promise<SecretBackendInfo>
+    set(hostId: string, kind: SecretKind, value: string): Promise<void>
+    has(hostId: string): Promise<Record<SecretKind, boolean>>
+    remove(hostId: string, kind: SecretKind): Promise<void>
+  }
+
+  settings: {
+    get(): Promise<Settings>
+    update(patch: Partial<Settings>): Promise<Settings>
+    onChanged(cb: (s: Settings) => void): Unsubscribe
+  }
+
+  knownHosts: {
+    list(): Promise<KnownHostEntry[]>
+    remove(hostKey: string): Promise<void>
+  }
+
+  protonPass: {
+    status(): Promise<PPStatus>
+    vaults(): Promise<PPVault[]>
+    items(shareId: string, type?: 'login' | 'ssh-key'): Promise<PPItem[]>
+    agentStatus(): Promise<PPAgentStatus>
+    agentStart(vaultShareId?: string): Promise<PPAgentStatus>
+    agentStop(): Promise<PPAgentStatus>
+    sync(): Promise<SyncResult>
+  }
+
+  ssh: {
+    open(hostId: string, cols: number, rows: number): Promise<string>
+    write(sessionId: string, data: string): void
+    resize(sessionId: string, cols: number, rows: number): void
+    close(sessionId: string): Promise<void>
+    onEvent(cb: (ev: SessionEvent) => void): Unsubscribe
+  }
+
+  prompts: {
+    onRequest(cb: (req: PromptRequest) => void): Unsubscribe
+    onCancel(cb: (id: string) => void): Unsubscribe
+    respond(id: string, res: PromptResponse): void
+  }
+
+  sftp: {
+    home(sessionId: string): Promise<string>
+    list(sessionId: string, path: string): Promise<DirListing>
+    mkdir(sessionId: string, path: string): Promise<void>
+    rename(sessionId: string, from: string, to: string): Promise<void>
+    remove(sessionId: string, paths: string[]): Promise<void>
+    download(sessionId: string, remotePaths: string[], localDir: string): Promise<string[]>
+    upload(sessionId: string, localPaths: string[], remoteDir: string): Promise<string[]>
+    cancelTransfer(transferId: string): Promise<void>
+    clearTransfers(sessionId: string): Promise<void>
+    onTransfer(cb: (t: TransferInfo) => void): Unsubscribe
+  }
+
+  local: {
+    roots(): Promise<LocalRoots>
+    list(path: string): Promise<DirListing>
+    mkdir(path: string): Promise<void>
+    rename(from: string, to: string): Promise<void>
+    trash(paths: string[]): Promise<void>
+    open(path: string): Promise<void>
+    join(dir: string, name: string): Promise<string>
+  }
+
+  dialog: {
+    pickKeyFile(): Promise<string | null>
+  }
+
+  clipboard: {
+    read(): Promise<string>
+    write(text: string): Promise<void>
+  }
+
+  /** Resolve the absolute path of a File dropped from the OS. */
+  pathForFile(file: File): string
+  openExternal(url: string): Promise<void>
+}

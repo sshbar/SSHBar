@@ -1,0 +1,33 @@
+appId: app.sshbuddy.client
+productName: SSHBuddy
+copyright: Copyright © 2026 SSHBuddy
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**
+  - build/icon.png
+  - package.json
+  - "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme,test,__tests__,tests,example,examples}"
+  - "!**/*.{map,ts,tsx}"
+# ssh2 ships optional native crypto bindings and falls back to pure JS; skip rebuilding them for Electron
+npmRebuild: false
+asarUnpack:
+  - "**/*.node"
+linux:
+  target: [AppImage, deb]
+  category: Network
+  icon: build/icon.png
+  synopsis: SSH client with SFTP, live stats and Proton Pass integration
+deb:
+  depends: [libsecret-1-0]
+win:
+  target: [nsis]
+  icon: build/icon.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+mac:
+  target: [dmg]
+  category: public.app-category.developer-tools
+  icon: build/icon.png

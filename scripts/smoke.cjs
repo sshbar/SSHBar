@@ -1,0 +1,121 @@
+// Headless smoke test: launches the built app, connects to a test server and screenshots each view.
+//   npx electron-vite build
+//   SMOKE_KEY=/path/to/id_plain SMOKE_PORT=2222 npx electron --ozone-platform=headless scripts/smoke.cjs
+const { app, BrowserWindow } = require('electron')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
+
+const out = process.env.SMOKE_OUT || fs.mkdtempSync(path.join(os.tmpdir(), 'sshbuddy-smoke-'))
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sshbuddy-data-'))
+const now = Date.now()
+const host = (id, label, group, extra) => ({
+  id, label, group, hostname: '127.0.0.1', port: Number(process.env.SMOKE_PORT || 2222), username: 'tester',
+  auth: { method: 'key', password: { source: 'prompt' }, key: { source: 'file', path: process.env.SMOKE_KEY }, passphrase: { source: 'prompt' }, agent: 'system', agentSocket: '' },
+  tags: [], notes: '', createdAt: now, updatedAt: now, ...extra
+})
+fs.writeFileSync(path.join(dataDir, 'hosts.json'), JSON.stringify({
+  version: 1, deleted: {},
+  hosts: [
+    host('h-test', 'docker-test', 'Lab', { tags: ['docker'] }),
+    host('h-web', 'web-prod-1', 'Production', { hostname: 'web1.example.com', port: 22, username: 'deploy', auth: { method: 'password', password: { source: 'protonpass', shareId: 's', itemId: 'i', title: 'web1 deploy' }, key: { source: 'file', path: '' }, passphrase: { source: 'prompt' }, agent: 'system', agentSocket: '' } }),
+    host('h-db', 'db-primary', 'Production', { hostname: '10.0.4.12', username: 'postgres', auth: { method: 'agent', password: { source: 'prompt' }, key: { source: 'file', path: '' }, passphrase: { source: 'prompt' }, agent: 'protonpass', agentSocket: '' }, tags: ['postgres'] }),
+    host('h-pi', 'raspberry-pi', '', { hostname: 'pi.local', username: 'pi', port: 22 }),
+    host('h-nouser', 'no-user', 'Lab', { username: '' })
+  ]
+}))
+process.env.SSHBUDDY_DATA_DIR = dataDir
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const log = (...a) => console.log('[smoke]', ...a)
+
+app.on('browser-window-created', (_e, win) => {
+  win.webContents.once('did-finish-load', async () => {
+    const js = (code) => win.webContents.executeJavaScript(code)
+    const shot = async (name) => {
+      const img = await win.webContents.capturePage()
+      fs.writeFileSync(path.join(out, name + '.png'), img.toPNG())
+      log('saved', name)
+    }
+    const waitFor = async (expr, ms = 10000) => {
+      const t = Date.now()
+      while (!(await js(`!!(${expr})`))) {
+        if (Date.now() - t > ms) throw new Error('timeout waiting for ' + expr)
+        await sleep(100)
+      }
+    }
+    try {
+      win.setSize(1400, 860)
+      await waitFor(`document.querySelector('.host-card')`)
+      await sleep(300)
+      await shot('1-hosts')
+
+      await js(`document.querySelector('.host-card .btn.primary').click()`)
+      await waitFor(`document.querySelector('.modal')`)
+      await sleep(200)
+      await shot('2-hostkey-prompt')
+      await js(`[...document.querySelectorAll('.modal .btn')].find(b => /Trust/.test(b.textContent)).click()`)
+      await waitFor(`document.querySelector('.statsbar .sb-label')`, 15000)
+      await sleep(400)
+      win.webContents.focus()
+      for (const ch of 'uname -a && df -h / && ls -la\r') {
+        win.webContents.sendInputEvent({ type: 'char', keyCode: ch })
+      }
+      // typed input must reach the remote shell and its output must render
+      await waitFor(`/Filesystem/.test(document.querySelector('.xterm-rows')?.textContent || '')`, 10000)
+      await sleep(1500)
+      await shot('3-terminal')
+      const rows = await js(`document.querySelector('.xterm-rows').textContent`)
+      const banners = rows.split('Welcome to OpenSSH Server').length - 1
+      if (banners !== 1) throw new Error(`login banner rendered ${banners} times (output duplicated)`)
+      if (!rows.includes('uname -a && df -h / && ls -la') || rows.includes('uunnaammee')) throw new Error('typed command echoed incorrectly: ' + rows.slice(0, 300))
+
+      await js(`[...document.querySelectorAll('.session-toolbar .segmented button')].find(b => /Files/.test(b.textContent)).click()`)
+      await waitFor(`document.querySelectorAll('.file-pane')[1]?.querySelector('.fp-row:not(.fp-header)')`, 10000)
+      await sleep(800)
+      await shot('4-files')
+
+      await js(`document.querySelectorAll('.rail-btn')[1].click()`)
+      await sleep(2500)
+      await shot('5-settings')
+
+      // Host without a username: the Username dialog must keep keyboard focus (not the terminal)
+      await js(`document.querySelectorAll('.rail-btn')[0].click()`)
+      await sleep(200)
+      await js(`[...document.querySelectorAll('.host-card')].find(c => c.textContent.includes('no-user')).querySelector('.btn.primary').click()`)
+      await waitFor(`[...document.querySelectorAll('.modal .field span')].some(e => e.textContent === 'Username')`)
+      await sleep(600) // give any stray focus() a chance to run
+      for (const ch of 'tester') win.webContents.sendInputEvent({ type: 'char', keyCode: ch })
+      const val = await js(`document.activeElement && document.activeElement.tagName === 'INPUT' ? document.activeElement.value : 'focus=' + (document.activeElement && document.activeElement.className)`)
+      if (val !== 'tester') throw new Error('username keystrokes did not land in the dialog: ' + val)
+      await shot('7-username-prompt')
+      // a real Enter keypress is keyDown + char + keyUp
+      win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' })
+      win.webContents.sendInputEvent({ type: 'char', keyCode: '\r' })
+      win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' })
+      await waitFor(`document.querySelector('.tab.on .dot-connected')`, 15000)
+      await sleep(1500)
+      const rows2 = await js(`[...document.querySelectorAll('.session')].find(s => s.style.display !== 'none').querySelector('.xterm-rows').textContent`)
+      if (rows2.includes('tester') || (rows2.split('Welcome to OpenSSH Server').length - 1) !== 1) throw new Error('second session output wrong: ' + rows2.slice(0, 200))
+      await shot('8-no-user-session')
+
+      await js(`document.querySelector('.tab:not(.tab-home)').click()`)
+      await js(`[...document.querySelectorAll('.session-toolbar .segmented button')].find(b => /Terminal/.test(b.textContent)).click()`)
+      await js(`document.querySelectorAll('.rail-btn')[0].click()`)
+      await js(`document.querySelector('.btn.primary').click()`) // New host
+      await waitFor(`document.querySelector('.modal')`)
+      await js(`[...document.querySelectorAll('.modal .segmented button')].find(b => /SSH key/.test(b.textContent)).click()`)
+      await sleep(300)
+      await shot('6-host-editor')
+      log('OK', out)
+    } catch (e) {
+      log('FAILED', e.message)
+      await shot('error').catch(() => {})
+      process.exitCode = 1
+    } finally {
+      setTimeout(() => app.exit(process.exitCode || 0), 200)
+    }
+  })
+})
+
+require('../out/main/index.js')
