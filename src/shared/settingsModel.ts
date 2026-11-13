@@ -33,6 +33,8 @@ export function sanitizeSettings(raw: Partial<Settings>): Settings {
       enabled: Boolean(fs.enabled),
       path: typeof fs.path === 'string' ? fs.path : '',
       includeSecrets: fs.includeSecrets !== false,
+      sharePassSecrets: fs.sharePassSecrets === true,
+      pathLabel: typeof fs.pathLabel === 'string' ? fs.pathLabel.slice(0, 300) : '',
       rememberPassword: fs.rememberPassword !== false,
       lastSyncAt: Number(fs.lastSyncAt) || 0,
       lastError: String(fs.lastError ?? '')

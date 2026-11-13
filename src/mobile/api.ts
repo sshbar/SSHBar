@@ -2,10 +2,10 @@
 // sshj bridge and app-private storage instead of Electron IPC.
 import type { SSHbarApi, Unsubscribe } from '../shared/api'
 import type { FileSyncStatus, PromptRequest, PromptResponse, SecretKind, SessionEvent, TransferInfo } from '../shared/types'
-import { DEFAULT_SETTINGS } from '../shared/defaults'
 import { Native, b64ToBytes } from './native'
 import { MobileHosts, MobileKnownHosts, MobileSettings, MobileSnippets } from './stores'
 import { MobileSession, type PromptInput } from './session'
+import { MobileFileSync } from './fileSync'
 
 const notOnAndroid = (what: string) => (): Promise<never> => Promise.reject(new Error(`${what} is not available on Android yet`))
 
@@ -82,7 +82,12 @@ export async function createMobileApi(): Promise<SSHbarApi> {
     void answer.then((a) => Native.sshKeyboardRespond({ requestId: e.requestId, answer: a }))
   })
 
-  const fileSyncStatus = (): FileSyncStatus => ({ ...DEFAULT_SETTINGS.fileSync, ...settings.get().fileSync, locked: false, syncing: false })
+  const fileSyncEvents = listeners<FileSyncStatus>()
+  const fileSync = new MobileFileSync({ hosts, snippets, settings, onStatus: (s) => fileSyncEvents.emit(s) })
+  const picked = new Map<string, string>() // content:// uri -> display name from the picker
+  hosts.changed.on(() => !fileSync.applying && fileSync.scheduleSync())
+  snippets.changed.on(() => !fileSync.applying && fileSync.scheduleSync())
+  void fileSync.init()
 
   const api: SSHbarApi = {
     platform: 'android',
@@ -123,6 +128,7 @@ export async function createMobileApi(): Promise<SSHbarApi> {
       set: async (hostId, kind, value) => {
         if (value) await Native.secureSet({ key: secretKey(hostId, kind), value })
         else await Native.secureRemove({ key: secretKey(hostId, kind) })
+        fileSync.scheduleSync()
       },
       has: async (hostId) => ({
         password: !!(await secret(hostId, 'password')),
@@ -154,15 +160,22 @@ export async function createMobileApi(): Promise<SSHbarApi> {
     },
 
     fileSync: {
-      status: async () => fileSyncStatus(),
-      choosePath: notOnAndroid('The sync file'),
-      enable: notOnAndroid('The sync file'),
-      unlock: notOnAndroid('The sync file'),
-      disable: async () => undefined,
-      syncNow: notOnAndroid('The sync file'),
-      changePassword: notOnAndroid('The sync file'),
-      setIncludeSecrets: notOnAndroid('The sync file'),
-      onStatus: () => () => undefined
+      status: async () => fileSync.status(),
+      choosePath: async (mode) => {
+        const r = await fileSync.pick(mode)
+        if (!r) return null
+        picked.set(r.uri, r.name)
+        return r.uri
+      },
+      describePath: (path) => picked.get(path) || (path === settings.get().fileSync.path && settings.get().fileSync.pathLabel) || path,
+      enable: (opts) => fileSync.enable({ ...opts, label: picked.get(opts.path) ?? 'sync file' }),
+      unlock: (password, remember) => fileSync.unlock(password, remember),
+      disable: () => fileSync.disable(),
+      syncNow: () => fileSync.sync(),
+      changePassword: (pw) => fileSync.changePassword(pw),
+      setIncludeSecrets: (v) => fileSync.setIncludeSecrets(v),
+      setSharePassSecrets: notOnAndroid('Sharing Proton Pass secrets'),
+      onStatus: (cb) => fileSyncEvents.on(cb)
     },
 
     ssh: {

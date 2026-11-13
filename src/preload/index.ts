@@ -69,6 +69,7 @@ const api: SSHbarApi = {
     syncNow: () => invoke('fileSync:syncNow'),
     changePassword: (pw) => invoke('fileSync:changePassword', pw),
     setIncludeSecrets: (v) => invoke('fileSync:setIncludeSecrets', v),
+    setSharePassSecrets: (v) => invoke('fileSync:setSharePassSecrets', v),
     onStatus: (cb) => on('fileSync:status', cb)
   },
 

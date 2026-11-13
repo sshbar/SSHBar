@@ -98,6 +98,10 @@ export interface FileSyncSettings {
   enabled: boolean
   path: string
   includeSecrets: boolean
+  /** desktop: copy the Proton Pass secrets hosts refer to into the file, for phones (no pass-cli there) */
+  sharePassSecrets: boolean
+  /** human-readable name of the file (Android stores a content:// address in `path`) */
+  pathLabel: string
   rememberPassword: boolean
   lastSyncAt: number
   lastError: string

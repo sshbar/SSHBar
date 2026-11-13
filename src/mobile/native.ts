@@ -37,6 +37,12 @@ export interface SshBridgePlugin {
   clipboardWrite(o: { text: string }): Promise<void>
   openUrl(o: { url: string }): Promise<void>
 
+  /** Android document picker; keeps read/write permission across restarts */
+  pickDocument(o: { mode: 'open' | 'create'; name?: string }): Promise<{ uri: string | null; name?: string }>
+  readUri(o: { uri: string }): Promise<{ data: string | null }>
+  writeUri(o: { uri: string; data: string }): Promise<void>
+  scrypt(o: { password: string; salt: string; N: number; r: number; p: number; dkLen: number }): Promise<{ key: string }>
+
   /** TCP (or tunnel via viaId) + key exchange. Nothing is authenticated yet; the caller verifies the host key. */
   sshOpen(o: { id: string; host: string; port: number; viaId?: string }): Promise<HostKeyInfo>
   sshAuthPassword(o: { id: string; username: string; password: string }): Promise<AuthResult>

@@ -45,6 +45,8 @@ export const DEFAULT_SETTINGS: Settings = {
     enabled: false,
     path: '',
     includeSecrets: true,
+    sharePassSecrets: false,
+    pathLabel: '',
     rememberPassword: true,
     lastSyncAt: 0,
     lastError: ''

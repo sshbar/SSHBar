@@ -15,7 +15,16 @@ import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
+
+import androidx.activity.result.ActivityResult;
+import android.database.Cursor;
+import android.provider.OpenableColumns;
+
+import org.bouncycastle.crypto.generators.SCrypt;
+import java.io.ByteArrayOutputStream;
+import java.text.Normalizer;
 
 import net.schmizz.sshj.DefaultConfig;
 import net.schmizz.sshj.SSHClient;
@@ -297,6 +306,115 @@ public class SshBridgePlugin extends Plugin {
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         getContext().startActivity(i);
         call.resolve();
+    }
+
+    // ------------------------------------------------------------------ sync file (Storage Access Framework)
+
+    /** Let the user open or create the sync file in any document provider (Drive, Dropbox, local, Syncthing…). */
+    @PluginMethod
+    public void pickDocument(PluginCall call) {
+        boolean create = "create".equals(call.getString("mode", "open"));
+        Intent i = new Intent(create ? Intent.ACTION_CREATE_DOCUMENT : Intent.ACTION_OPEN_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType(create ? "application/json" : "*/*");
+        if (create) i.putExtra(Intent.EXTRA_TITLE, call.getString("name", "sshbar-sync.json"));
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        startActivityForResult(call, i, "onDocumentPicked");
+    }
+
+    @ActivityCallback
+    private void onDocumentPicked(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        if (result.getResultCode() != android.app.Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) {
+            JSObject r = new JSObject();
+            r.put("uri", null);
+            call.resolve(r);
+            return;
+        }
+        Uri uri = result.getData().getData();
+        try {
+            getContext().getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        } catch (Exception ignored) {
+            // some providers only grant per-session access; it still works until the app restarts
+        }
+        String name = uri.getLastPathSegment();
+        try (Cursor c = getContext().getContentResolver().query(uri, new String[] { OpenableColumns.DISPLAY_NAME }, null, null, null)) {
+            if (c != null && c.moveToFirst()) name = c.getString(0);
+        } catch (Exception ignored) {
+        }
+        JSObject r = new JSObject();
+        r.put("uri", uri.toString());
+        r.put("name", name);
+        call.resolve(r);
+    }
+
+    @PluginMethod
+    public void readUri(PluginCall call) {
+        final String uri = call.getString("uri", "");
+        pool.execute(() -> {
+            try (InputStream in = getContext().getContentResolver().openInputStream(Uri.parse(uri))) {
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                byte[] buf = new byte[65536];
+                int n;
+                while (in != null && (n = in.read(buf)) > 0) out.write(buf, 0, n);
+                JSObject r = new JSObject();
+                r.put("data", out.toString("UTF-8"));
+                call.resolve(r);
+            } catch (java.io.FileNotFoundException e) {
+                JSObject r = new JSObject();
+                r.put("data", null);
+                call.resolve(r);
+            } catch (Exception e) {
+                call.reject("Could not read the sync file: " + e.getMessage());
+            }
+        });
+    }
+
+    @PluginMethod
+    public void writeUri(PluginCall call) {
+        final String uri = call.getString("uri", "");
+        final byte[] data = call.getString("data", "").getBytes(StandardCharsets.UTF_8);
+        pool.execute(() -> {
+            Exception last = null;
+            for (String mode : new String[] { "wt", "w" }) { // "wt" truncates; a few providers only accept "w"
+                try (OutputStream out = getContext().getContentResolver().openOutputStream(Uri.parse(uri), mode)) {
+                    if (out == null) throw new java.io.IOException("provider returned no stream");
+                    out.write(data);
+                    out.flush();
+                    call.resolve();
+                    return;
+                } catch (Exception e) {
+                    last = e;
+                }
+            }
+            call.reject("Could not write the sync file: " + (last == null ? "" : last.getMessage()));
+        });
+    }
+
+    /** scrypt (RFC 7914) for the sync file's master password; too heavy for the WebView. */
+    @PluginMethod
+    public void scrypt(PluginCall call) {
+        final String password = call.getString("password", "");
+        final String salt = call.getString("salt", "");
+        final int n = call.getInt("N", 131072);
+        final int r = call.getInt("r", 8);
+        final int p = call.getInt("p", 1);
+        final int len = call.getInt("dkLen", 32);
+        if (n < 16384 || n > 4194304 || r < 1 || r > 32 || p < 1 || p > 16 || len != 32) {
+            call.reject("Unsupported key derivation parameters");
+            return;
+        }
+        pool.execute(() -> {
+            try {
+                byte[] pw = Normalizer.normalize(password, Normalizer.Form.NFC).getBytes(StandardCharsets.UTF_8);
+                byte[] key = SCrypt.generate(pw, Base64.decode(salt, Base64.NO_WRAP), n, r, p, len);
+                JSObject res = new JSObject();
+                res.put("key", b64(key, key.length));
+                call.resolve(res);
+            } catch (Throwable e) {
+                call.reject("Key derivation failed: " + e.getMessage());
+            }
+        });
     }
 
     // ------------------------------------------------------------------ SSH

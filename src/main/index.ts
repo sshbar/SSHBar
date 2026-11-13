@@ -26,6 +26,7 @@ import { localList, localMkdir, localRename, localRoots } from './localfs'
 import { hostsFromSshConfig, parseSshConfig } from './sshconfig'
 import { syncHosts } from './sync'
 import { FileSync } from './fileSync'
+import { passRef, type PassSecret } from '../shared/vaultSync'
 import { SnippetStore } from './store/snippets'
 import { convertTermix, isTermixExport } from './importers/termix'
 
@@ -188,7 +189,47 @@ async function runSync() {
   }
 }
 
-const fileSync = new FileSync({ hosts, secrets, settings, snippets, onStatus: (s) => send('fileSync:status', s) })
+/** Fetch the Proton Pass secrets the hosts refer to (each item once), for the sync file's phone copies. */
+async function collectPassSecrets(list: Host[]): Promise<Record<string, PassSecret>> {
+  const out: Record<string, PassSecret> = {}
+  const wanted = new Map<string, { shareId: string; itemId: string; key: boolean; password: boolean }>()
+  for (const h of list) {
+    const a = h.auth
+    const add = (ref: { shareId: string; itemId: string }, kind: 'key' | 'password'): void => {
+      const id = passRef(ref.shareId, ref.itemId)
+      const w = wanted.get(id) ?? { shareId: ref.shareId, itemId: ref.itemId, key: false, password: false }
+      w[kind] = true
+      wanted.set(id, w)
+    }
+    if (a.method === 'password' && a.password.source === 'protonpass') add(a.password, 'password')
+    if (a.method === 'key' && a.key.source === 'protonpass') add(a.key, 'key')
+    if (a.method === 'key' && a.passphrase.source === 'protonpass') add(a.passphrase, 'password')
+  }
+  for (const [id, w] of wanted) {
+    try {
+      const entry: PassSecret = {}
+      if (w.key) {
+        const k = await protonPass.sshKey(w.shareId, w.itemId)
+        entry.privateKey = k.privateKey
+        if (k.passphrase) entry.passphrase = k.passphrase
+      }
+      if (w.password) entry.password = await protonPass.password(w.shareId, w.itemId)
+      out[id] = entry
+    } catch {
+      /* unreachable item (or CLI logged out): keep whatever copy the file already has */
+    }
+  }
+  return out
+}
+
+const fileSync = new FileSync({
+  hosts,
+  secrets,
+  settings,
+  snippets,
+  passSecrets: () => ({ collect: collectPassSecrets }),
+  onStatus: (s) => send('fileSync:status', s)
+})
 secrets.onChange(() => {
   if (!fileSync.applying) fileSync.scheduleSync()
 })
@@ -407,6 +448,7 @@ function registerIpc(): void {
   handle('fileSync:syncNow', () => fileSync.sync())
   handle('fileSync:changePassword', (pw: string) => fileSync.changePassword(str(pw)))
   handle('fileSync:setIncludeSecrets', (v: boolean) => fileSync.setIncludeSecrets(Boolean(v)))
+  handle('fileSync:setSharePassSecrets', (v: boolean) => fileSync.setSharePassSecrets(Boolean(v)))
 
   // ----- SSH -----
   handle('ssh:open', (hostId: string, cols: number, rows: number) => {

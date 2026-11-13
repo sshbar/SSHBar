@@ -82,8 +82,9 @@ export function FileSyncSection() {
       return (
         <>
           <p className="muted small">
-            Put the file in any folder your computers already sync — Dropbox, OneDrive, iCloud Drive, Syncthing, Proton Drive or a NAS share. No server
-            or account is needed. Everything in it is encrypted with your master password (scrypt + AES-256-GCM).
+            {api.platform === 'android'
+              ? 'Choose “Use existing sync file” and pick the file your computer created (Drive, Dropbox and Syncthing folders all appear in the picker), then enter the same master password.'
+              : 'Put the file in any folder your computers already sync — Dropbox, OneDrive, iCloud Drive, Syncthing, Proton Drive or a NAS share. No server or account is needed. Everything in it is encrypted with your master password (scrypt + AES-256-GCM).'}
           </p>
           <div className="row gap wrap">
             <button className="btn primary" onClick={() => void choose('create')}>
@@ -109,7 +110,7 @@ export function FileSyncSection() {
       >
         <div className="field">
           <span>{create ? 'New sync file' : 'Sync file'}</span>
-          <code className="path-line">{setup.path}</code>
+          <code className="path-line">{api.fileSync.describePath?.(setup.path) ?? setup.path}</code>
         </div>
         {passwordForm(create)}
         {create && <p className="muted small">If the file already exists there, it is opened with this password instead of being replaced.</p>}
@@ -139,7 +140,7 @@ export function FileSyncSection() {
     <>
       <div className="field">
         <span>Sync file</span>
-        <code className="path-line">{status.path}</code>
+        <code className="path-line">{status.pathLabel || api.fileSync.describePath?.(status.path) || status.path}</code>
       </div>
 
       <div className="status-line">
@@ -213,6 +214,19 @@ export function FileSyncSection() {
             />
             Include passwords and keys saved on this device
           </label>
+          {api.platform !== 'android' && (
+            <label className="check" title="Phones have no Proton Pass CLI, so they cannot fetch these themselves">
+              <input
+                type="checkbox"
+                checked={status.sharePassSecrets}
+                onChange={(e) => void run(() => api.fileSync.setSharePassSecrets(e.target.checked))}
+              />
+              <span>
+                Share Proton Pass keys and passwords with my phones
+                <span className="muted small"> — copies the ones your hosts use into this encrypted file (switch off to remove them)</span>
+              </span>
+            </label>
+          )}
           <div className="row gap wrap">
             <button className="btn" disabled={status.syncing} onClick={() => void run(() => api.fileSync.syncNow())}>
               <RefreshCw size={14} className={status.syncing ? 'spin' : ''} /> Sync now

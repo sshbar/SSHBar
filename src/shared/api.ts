@@ -85,6 +85,9 @@ export interface SSHbarApi {
     syncNow(): Promise<SyncResult>
     changePassword(newPassword: string): Promise<SyncResult>
     setIncludeSecrets(include: boolean): Promise<SyncResult>
+    setSharePassSecrets(share: boolean): Promise<SyncResult>
+    /** human-readable name for a sync file path (Android: picker display name for content:// URIs) */
+    describePath?(path: string): string
     onStatus(cb: (s: FileSyncStatus) => void): Unsubscribe
   }
 

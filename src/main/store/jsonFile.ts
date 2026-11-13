@@ -30,3 +30,18 @@ export function writeJson(file: string, data: unknown): Promise<void> {
   queues.set(file, next)
   return next
 }
+
+/** Write text atomically (temp file + rename), serialized per file like writeJson. */
+export function writeText(file: string, text: string): Promise<void> {
+  const prev = queues.get(file) ?? Promise.resolve()
+  const next = prev
+    .catch(() => undefined)
+    .then(async () => {
+      await fs.mkdir(dirname(file), { recursive: true, mode: 0o700 })
+      const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`
+      await fs.writeFile(tmp, text, { mode: 0o600 })
+      await fs.rename(tmp, file)
+    })
+  queues.set(file, next)
+  return next
+}

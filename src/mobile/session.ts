@@ -218,7 +218,10 @@ export class MobileSession {
       if (ref.source === 'local') {
         note = 'No password is saved on this device.'
       } else if (ref.source === 'protonpass') {
-        note = 'Proton Pass is not available on Android. Enter the password (you can save it on this device).'
+        // copied from Proton Pass into the sync file by a desktop that shares them
+        const shared = await this.deps.secret(`pp:${ref.shareId}:${ref.itemId}`, 'password')
+        if (shared) return shared
+        note = 'Proton Pass is not available on Android. Enter the password, or turn on “Share Proton Pass keys with my phones” on your computer.'
       }
     }
     const res = await this.ask({
@@ -245,7 +248,7 @@ export class MobileSession {
         ref.source === 'file'
           ? `This host uses the key file ${ref.path || '(none)'} on your computer. Edit the host on this phone and paste the key.`
           : ref.source === 'protonpass'
-            ? 'This host uses an SSH key from Proton Pass, which is not available on Android. Edit the host on this phone and paste the key.'
+            ? 'This host uses an SSH key from Proton Pass, which is not available on Android. On your computer turn on “Share Proton Pass keys with my phones” (Settings → Encrypted sync file), or paste the key in this host on the phone.'
             : 'No private key is saved on this device for this host'
       )
     }
@@ -253,7 +256,12 @@ export class MobileSession {
     if (!info.valid && !info.needsPassphrase) throw new Error(`Unsupported or invalid private key: ${info.error ?? ''}`)
     if (!info.needsPassphrase) return { key }
 
-    const stored = await this.deps.secret(this.host.id, 'passphrase')
+    const pref = this.host.auth.passphrase
+    const kref = this.host.auth.key
+    const stored =
+      (await this.deps.secret(this.host.id, 'passphrase')) ??
+      (kref.source === 'protonpass' ? await this.deps.secret(`pp:${kref.shareId}:${kref.itemId}`, 'passphrase') : undefined) ??
+      (pref.source === 'protonpass' ? await this.deps.secret(`pp:${pref.shareId}:${pref.itemId}`, 'password') : undefined)
     if (stored && (await Native.sshKeyInfo({ privateKey: key, passphrase: stored })).valid) return { key, passphrase: stored }
     let message = stored ? 'The saved passphrase did not unlock this key.' : `Enter the passphrase for the private key used by ${this.host.label}.`
     for (let i = 0; i < MAX_TRIES; i++) {

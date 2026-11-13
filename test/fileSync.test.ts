@@ -201,3 +201,68 @@ describe('sync files written before the rename', () => {
     expect(decryptVault(env, key).secrets.h.password).toBe('old')
   })
 })
+
+describe('sharing Proton Pass secrets with phones', () => {
+  it('copies the referenced items into the file, passes them on, and removes them when switched off', async () => {
+    const { syncVault, passRef } = await import('../src/shared/vaultSync')
+    const { encryptVault, decryptVault } = await import('../src/main/vaultFile')
+    const folder = mkdtempSync(join(tmpdir(), 'sb-pass-'))
+    const path = join(folder, 'sync.json')
+    const dir = mkdtempSync(join(tmpdir(), 'sb-dev-'))
+    const hosts = new HostStore(dir)
+    const secrets = new SecretStore(dir, cipher)
+    const settings = new SettingsStore(dir)
+    let fetched = 0
+    const desktop = new FileSync({
+      hosts,
+      secrets,
+      settings,
+      onStatus: () => undefined,
+      kdfN: 2 ** 14,
+      passSecrets: () => ({
+        collect: async (list) => {
+          fetched++
+          const out: Record<string, { privateKey: string }> = {}
+          for (const h of list) if (h.auth.method === 'key' && h.auth.key.source === 'protonpass') out[passRef(h.auth.key.shareId, h.auth.key.itemId)] = { privateKey: 'PP-KEY' }
+          return out
+        }
+      })
+    })
+    devices.push(desktop)
+    await hosts.save({ ...emptyHost(), label: 'pp-host', hostname: 'pp.example', auth: { ...emptyHost().auth, method: 'key', key: { source: 'protonpass', shareId: 'S', itemId: 'I' } } })
+    await desktop.enable({ path, password: PASSWORD, includeSecrets: true, rememberPassword: false, create: true })
+    expect(fetched).toBe(0) // off by default
+    await desktop.setSharePassSecrets(true)
+    expect(fetched).toBe(1)
+
+    // a phone-like device: no collect, only apply
+    const { deriveKey } = await import('../src/main/vaultFile')
+    const phoneApplied: Record<string, unknown>[] = []
+    const phoneHosts = { list: () => [], tombstones: () => ({}), replaceAll: async () => undefined }
+    const phoneSync = async () => {
+      const text = readFileSync(path, 'utf8')
+      return syncVault<Buffer>({
+        text,
+        includeSecrets: true,
+        codec: {
+          newKdf: () => { throw new Error('unused') },
+          keyFor: (kdf) => deriveKey(PASSWORD, kdf),
+          encrypt: async (p, k, kdf) => encryptVault(p, k, kdf),
+          decrypt: async (e, k) => decryptVault(e, k)
+        },
+        stores: {
+          hosts: phoneHosts,
+          secrets: { getAll: async () => ({}), set: async () => undefined, remove: async () => undefined, removeHost: async () => undefined, available: async () => true },
+          passSecrets: { apply: async (m) => void phoneApplied.push(m) }
+        }
+      })
+    }
+    await phoneSync()
+    expect(phoneApplied.at(-1)).toEqual({ 'S:I': { privateKey: 'PP-KEY' } })
+    expect(readFileSync(path, 'utf8')).not.toContain('PP-KEY')
+
+    await desktop.setSharePassSecrets(false)
+    await phoneSync()
+    expect(phoneApplied.at(-1)).toEqual({})
+  })
+})
