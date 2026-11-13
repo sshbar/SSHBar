@@ -32,6 +32,8 @@ export interface Host {
   port: number
   username: string
   auth: HostAuth
+  /** Connect through this saved host (ProxyJump). '' = direct connection. */
+  jumpHostId: string
   tags: string[]
   notes: string
   createdAt: number
@@ -178,6 +180,7 @@ export type PromptRequest =
       fields: PromptField[]
       /** Offer a "save on this device" checkbox */
       allowRemember: boolean
+      rememberLabel?: string
     }
 
 export interface PromptResponse {

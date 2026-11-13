@@ -8,6 +8,7 @@ A cross-platform SSH client in the spirit of Termius, built with Electron, React
 |---|---|
 | **Cross-platform** | Windows, macOS and Linux (Electron). Installers via electron-builder: NSIS, DMG, AppImage/deb. |
 | **Central host list** | Hosts with groups, tags, notes and search. Import from `~/.ssh/config` or JSON. Optional **sync across devices through Proton Pass** (end-to-end encrypted). |
+| **Jump hosts** | Reach private servers through a bastion (ProxyJump). Chains like A → B → C work, every hop's host key is verified, and loops are detected. `ProxyJump` entries in `~/.ssh/config` are mapped when importing. |
 | **Authentication** | Password, SSH key (file, pasted, or from Proton Pass), SSH agent (system, Proton Pass agent, custom socket), plus keyboard-interactive / 2FA prompts. Encrypted keys are supported. If a key is rejected it falls back to asking for a password, like OpenSSH. |
 | **Proton Pass** | Passwords come from Login items and keys from SSH Key items, fetched on demand via `pass-cli` and kept in memory only. The `pass-cli ssh-agent` daemon can be started from the app. Host sync uses a Proton Pass note. |
 | **Terminal** | xterm.js with 256 colours and truecolor, clickable links, copy/paste, multiple tabs and reconnect. |
@@ -70,13 +71,13 @@ npm run dist:dir     # unpacked app for the current OS, quickest check
 
 ```bash
 npm test             # unit tests: stats parser, known_hosts, sync merge, ssh_config import, Proton Pass parsing
-npm run test:it      # starts an OpenSSH server in Docker (scripts/it-server.sh) and runs SSH/SFTP integration tests
+npm run test:it      # starts OpenSSH servers in Docker (scripts/it-server.sh) and runs SSH/SFTP/jump-host integration tests
 npm run test:smoke   # headless Electron run: connect, type in the terminal, open files/settings, save screenshots
                      # set ELECTRON_RENDERER_URL=<vite dev server url> to run it against React dev mode (StrictMode)
 SSHBUDDY_PP_LIVE=1 npx vitest run test/protonpass.live.test.ts   # read-only checks against your real pass-cli
 ```
 
-The integration suite covers password, retry and cancel, plain and encrypted keys, keys from Proton Pass, key-to-password fallback, host-key change detection, connection-refused errors, live stats, and SFTP folder upload/download round-trips with byte-level comparison and cancellation. Host sync runs against a fake `pass-cli` (`test/fixtures/fake-pass-cli.mjs`) that simulates two devices.
+The integration suite covers jump hosts (to a server that is only reachable through the bastion), password, retry and cancel, plain and encrypted keys, keys from Proton Pass, key-to-password fallback, host-key change detection, connection-refused errors, live stats, and SFTP folder upload/download round-trips with byte-level comparison and cancellation. Host sync runs against a fake `pass-cli` (`test/fixtures/fake-pass-cli.mjs`) that simulates two devices.
 
 ## Architecture
 
@@ -101,7 +102,7 @@ The renderer runs sandboxed with `contextIsolation` and has no Node access. Save
 
 ## Known limitations / next steps
 
-- Jump hosts (ProxyJump/ProxyCommand) and port forwarding aren't implemented yet. Imported hosts that use them get a note.
+- Port forwarding isn't implemented yet. `ProxyCommand` isn't supported; imported hosts that use it get a note.
 - Live CPU/RAM/network stats need a Linux server. macOS/BSD hosts show disk usage only.
 - Only tested on Linux so far. Windows and macOS builds are configured but unverified.
 - Proton Pass sync was tested against a simulated CLI. Its write commands (`item create note`, `item update --field`) come from `pass-cli --help` but haven't been run against a real vault yet.

@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactElement } from 'react'
-import { Copy, Import, KeyRound, Lock, Pencil, Plus, Search, Server, Trash, Upload, Plug } from 'lucide-react'
+import { Copy, Import, KeyRound, Lock, Pencil, Plus, Route, Search, Server, Trash, Upload, Plug } from 'lucide-react'
 import type { Host } from '../../../shared/types'
 import { emptyHost } from '../../../shared/defaults'
 import { api } from '../api'
@@ -136,6 +136,12 @@ export function HostsView() {
                             {badge.text}
                           </span>
                           {badge.proton && <span className="badge proton">Proton Pass</span>}
+                          {h.jumpHostId && (
+                            <span className="badge jump" title="Connects through a jump host">
+                              <Route size={12} />
+                              via {hosts.find((x) => x.id === h.jumpHostId)?.label ?? 'missing host'}
+                            </span>
+                          )}
                           {h.tags.map((t) => (
                             <span key={t} className="badge tag">
                               {t}
@@ -179,6 +185,15 @@ export function HostsView() {
           message={
             <>
               Delete <b>{deleting.label}</b>? Passwords or keys saved on this device for it are removed too. Items in Proton Pass are not touched.
+              {(() => {
+                const users = hosts.filter((x) => x.jumpHostId === deleting.id)
+                return users.length ? (
+                  <p className="warn-text">
+                    It is the jump host for {users.map((u) => u.label).join(', ')} — those connections will stop working until you pick another
+                    jump host.
+                  </p>
+                ) : null
+              })()}
             </>
           }
           confirmLabel="Delete"

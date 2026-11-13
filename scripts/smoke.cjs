@@ -21,7 +21,8 @@ fs.writeFileSync(path.join(dataDir, 'hosts.json'), JSON.stringify({
     host('h-web', 'web-prod-1', 'Production', { hostname: 'web1.example.com', port: 22, username: 'deploy', auth: { method: 'password', password: { source: 'protonpass', shareId: 's', itemId: 'i', title: 'web1 deploy' }, key: { source: 'file', path: '' }, passphrase: { source: 'prompt' }, agent: 'system', agentSocket: '' } }),
     host('h-db', 'db-primary', 'Production', { hostname: '10.0.4.12', username: 'postgres', auth: { method: 'agent', password: { source: 'prompt' }, key: { source: 'file', path: '' }, passphrase: { source: 'prompt' }, agent: 'protonpass', agentSocket: '' }, tags: ['postgres'] }),
     host('h-pi', 'raspberry-pi', '', { hostname: 'pi.local', username: 'pi', port: 22 }),
-    host('h-nouser', 'no-user', 'Lab', { username: '' })
+    host('h-nouser', 'no-user', 'Lab', { username: '' }),
+    host('h-private', 'private-target', 'Lab', { hostname: 'sb-target', port: 2222, jumpHostId: 'h-test' })
   ]
 }))
 process.env.SSHBUDDY_DATA_DIR = dataDir
@@ -98,6 +99,30 @@ app.on('browser-window-created', (_e, win) => {
       const rows2 = await js(`[...document.querySelectorAll('.session')].find(s => s.style.display !== 'none').querySelector('.xterm-rows').textContent`)
       if (rows2.includes('tester') || (rows2.split('Welcome to OpenSSH Server').length - 1) !== 1) throw new Error('second session output wrong: ' + rows2.slice(0, 200))
       await shot('8-no-user-session')
+
+      if (process.env.SMOKE_JUMP) {
+        // private host reachable only through docker-test (bastion): two host-key prompts, then a shell on sb-target
+        await js(`document.querySelectorAll('.rail-btn')[0].click()`)
+        await sleep(200)
+        await js(`[...document.querySelectorAll('.host-card')].find(c => c.textContent.includes('private-target')).querySelector('.btn.primary').click()`)
+        // trust whatever host keys are still unknown (the bastion's was accepted earlier) until connected
+        const t0 = Date.now()
+        let trusted = 0
+        while (!(await js(`!!document.querySelector('.tab.on .dot-connected')`))) {
+          if (Date.now() - t0 > 20000) throw new Error('jump connection did not complete')
+          if (await js(`[...document.querySelectorAll('.modal .btn')].some(b => /Trust/.test(b.textContent))`)) {
+            await js(`[...document.querySelectorAll('.modal .btn')].find(b => /Trust/.test(b.textContent)).click()`)
+            trusted++
+          }
+          await sleep(150)
+        }
+        if (trusted !== 1) throw new Error(`expected exactly one new host key (sb-target), got ${trusted}`)
+        await sleep(300)
+        for (const ch of 'echo JUMPED-TO-$(hostname)\r') win.webContents.sendInputEvent({ type: 'char', keyCode: ch })
+        await waitFor(`[...document.querySelectorAll('.session')].find(s => s.style.display !== 'none').querySelector('.xterm-rows').textContent.includes('JUMPED-TO-sb-target')`, 10000)
+        await waitFor(`/sb-target/.test(document.querySelector('.statsbar')?.textContent || '')`, 10000)
+        await shot('9-jump-session')
+      }
 
       await js(`document.querySelector('.tab:not(.tab-home)').click()`)
       await js(`[...document.querySelectorAll('.session-toolbar .segmented button')].find(b => /Terminal/.test(b.textContent)).click()`)

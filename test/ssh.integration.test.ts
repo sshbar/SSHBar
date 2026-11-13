@@ -23,7 +23,10 @@ const PASSWORD = process.env.SSHBUDDY_IT_PASSWORD ?? 's3cret-pw'
 const PASSPHRASE = 'correct horse'
 
 const d = KEYDIR ? describe : describe.skip
+/** set SSHBUDDY_IT_JUMP=1 when scripts/it-server.sh also started the private "sb-target" server */
+const dj = KEYDIR && process.env.SSHBUDDY_IT_JUMP ? describe : describe.skip
 const dataDir = mkdtempSync(join(tmpdir(), 'sb-it-'))
+const savedHosts = new Map<string, Host>()
 const knownHosts = new KnownHostsStore(dataDir, [])
 const open: SshSession[] = []
 
@@ -34,6 +37,7 @@ function harness(hostPatch: Partial<Host>, responders: Responder[], extra: Parti
   const prompts: PromptInput[] = []
   const events: SessionEvent[] = []
   const remembered: [SecretKind, string][] = []
+  const savedUsernames: string[] = []
   const secrets = new Map<string, string>()
   let output = ''
   let resolveConnected!: (v: string) => void
@@ -53,6 +57,10 @@ function harness(hostPatch: Partial<Host>, responders: Responder[], extra: Parti
       remembered.push([kind, value])
     },
     agentSocket: async () => undefined,
+    getHost: (id) => savedHosts.get(id),
+    saveUsername: async (_h, u) => {
+      savedUsernames.push(u)
+    },
     emit: (ev) => {
       events.push(ev)
       if (ev.type === 'data') output += Buffer.from(ev.data).toString('utf8')
@@ -63,7 +71,7 @@ function harness(hostPatch: Partial<Host>, responders: Responder[], extra: Parti
   }
   const s = new SshSession('s-' + Math.random().toString(36).slice(2), host, deps)
   open.push(s)
-  return { s, prompts, events, remembered, secrets, settled, stats, out: () => output }
+  return { s, prompts, events, remembered, savedUsernames, secrets, settled, stats, out: () => output }
 }
 
 const trust: Responder = (req) => {
@@ -269,6 +277,70 @@ d('SFTP and transfers', () => {
     await remoteRemove(sftp, base)
     expect((await remoteList(sftp, home)).entries.some((e) => e.path === base)).toBe(false)
     expect(existsSync(join(dl, 'tree2'))).toBe(true)
+    t.s.close()
+  })
+})
+
+const keyAuth = (file = 'id_plain'): Host['auth'] => ({ method: 'key', key: { source: 'file', path: join(KEYDIR!, file) } }) as Host['auth']
+
+dj('jump hosts (ProxyJump)', () => {
+  const bastion = (): Host => sanitizeHost({ id: 'bastion', label: 'bastion', hostname: '127.0.0.1', port: PORT, username: USER, auth: keyAuth() })
+  const target = (): Partial<Host> => ({ id: 'h1', label: 'private', hostname: 'sb-target', port: 2222, jumpHostId: 'bastion', auth: keyAuth() })
+
+  it('the private target is not reachable directly', async () => {
+    const t = harness({ hostname: 'sb-target', port: 2222, auth: keyAuth() }, [])
+    void t.s.start(80, 24)
+    expect(await t.settled).toMatch(/^error: .*(not found|resolve|refused|unreachable|timed out)/i)
+  })
+
+  it('connects through the bastion, verifying both host keys', async () => {
+    savedHosts.set('bastion', bastion())
+    const kh = new KnownHostsStore(mkdtempSync(join(tmpdir(), 'sb-khj-')), [])
+    const t = harness(target(), [trust, trust], { knownHosts: kh })
+    void t.s.start(80, 24)
+    expect(await t.settled).toBe('connected')
+    expect(t.prompts.map((p) => (p.kind === 'hostkey' ? `${p.host}:${p.port}` : p.kind))).toEqual([`127.0.0.1:${PORT}`, 'sb-target:2222'])
+    expect(t.events.some((e) => e.type === 'status' && /via bastion/.test(e.message ?? ''))).toBe(true)
+    t.s.write('echo HOST=$(hostname)\n')
+    await waitFor(() => t.out().includes('HOST=sb-target'))
+    await waitFor(() => t.stats.some((x) => x.hostname === 'sb-target'), 10000)
+    // SFTP rides the same tunnelled connection
+    const sftp = await t.s.sftp()
+    expect((await remoteList(sftp, await remoteRealpath(sftp, '.'))).entries.length).toBeGreaterThan(0)
+
+    // if the bastion drops, the tunnelled session closes with a clear reason
+    ;(t.s as unknown as { jump: SshSession }).jump.close('test drop')
+    await waitFor(() => t.events.some((e) => e.type === 'closed'))
+    const closed = t.events.find((e) => e.type === 'closed') as Extract<SessionEvent, { type: 'closed' }>
+    expect(closed.reason).toMatch(/Jump host bastion disconnected|closed/i)
+  })
+
+  it('attributes failures to the jump host', async () => {
+    savedHosts.set('bastion', sanitizeHost({ ...bastion(), auth: keyAuth('does-not-exist') }))
+    const t = harness(target(), [() => ({ ok: false })])
+    void t.s.start(80, 24)
+    expect(await t.settled).toMatch(/^error: Jump host bastion: Cannot read key file/)
+    savedHosts.set('bastion', bastion())
+  })
+
+  it('detects loops and missing jump hosts', async () => {
+    savedHosts.set('a', sanitizeHost({ id: 'a', label: 'A', hostname: '127.0.0.1', port: PORT, username: USER, jumpHostId: 'b', auth: keyAuth() }))
+    savedHosts.set('b', sanitizeHost({ id: 'b', label: 'B', hostname: '127.0.0.1', port: PORT, username: USER, jumpHostId: 'a', auth: keyAuth() }))
+    const loop = harness({ ...target(), jumpHostId: 'a' }, [])
+    void loop.s.start(80, 24)
+    expect(await loop.settled).toMatch(/loop/i)
+    const missing = harness({ ...target(), jumpHostId: 'gone' }, [])
+    void missing.s.start(80, 24)
+    expect(await missing.settled).toMatch(/no longer exists/)
+  })
+
+  it('asks for a missing username and can save it', async () => {
+    const t = harness({ username: '', auth: keyAuth() }, [
+      (req) => (expect(req).toMatchObject({ kind: 'credentials', allowRemember: true }), { ok: true, values: [USER], remember: true })
+    ])
+    void t.s.start(80, 24)
+    expect(await t.settled).toBe('connected')
+    expect(t.savedUsernames).toEqual([USER])
     t.s.close()
   })
 })

@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs'
 import { connect as netConnect, type Socket } from 'node:net'
+import type { Duplex } from 'node:stream'
 import { homedir } from 'node:os'
 import { Client, utils, type ClientChannel, type SFTPWrapper, type AnyAuthMethod, type Prompt } from 'ssh2'
 import type { Host, PromptRequest, PromptResponse, SecretKind, SessionEvent, SessionStatus, Settings } from '../../shared/types'
@@ -19,6 +20,10 @@ export interface SessionDeps {
   /** Called after successful authentication for credentials the user asked to save. */
   remember(host: Host, kind: SecretKind, value: string): Promise<void>
   agentSocket(host: Host): Promise<string | undefined>
+  /** Look up another saved host (jump hosts). */
+  getHost(id: string): Host | undefined
+  /** Persist a username the user typed at connect time and asked to keep. */
+  saveUsername(host: Host, username: string): Promise<void>
   emit(ev: SessionEvent): void
 }
 
@@ -31,6 +36,8 @@ class CancelledError extends Error {
 const CONNECT_TIMEOUT_MS = 15_000
 const HANDSHAKE_TIMEOUT_MS = 20_000
 const MAX_TRIES = 3
+const MAX_HOPS = 8
+const TUNNEL_TIMEOUT_MS = 20_000
 
 export function expandHome(p: string): string {
   if (p === '~') return homedir()
@@ -49,7 +56,10 @@ function isEncryptedKeyError(e: Error): boolean {
 export class SshSession {
   readonly client = new Client()
   status: SessionStatus = 'connecting'
-  private sock?: Socket
+  private sock?: Socket | Duplex
+  /** Connection to the jump host this session is tunnelled through, if any. */
+  private jump?: SshSession
+  private saveUsernameAfterAuth = false
   private shell?: ClientChannel
   private browseSftp?: Promise<SFTPWrapper>
   private statsChannel?: ClientChannel
@@ -90,23 +100,7 @@ export class SshSession {
 
   async start(cols: number, rows: number): Promise<void> {
     try {
-      if (!this.username) {
-        const res = await this.ask({
-          kind: 'credentials',
-          title: `Username for ${this.host.hostname}`,
-          message: '',
-          fields: [{ label: 'Username', secret: false }],
-          allowRemember: false
-        })
-        if (!res.ok || !res.values?.[0]) throw new CancelledError()
-        this.username = res.values[0]
-      }
-      this.setStatus('connecting', `Connecting to ${this.host.hostname}:${this.host.port}…`)
-      this.sock = await this.openSocket()
-      await this.handshake()
-      for (const r of this.pendingRemember.splice(0)) {
-        await this.deps.remember(this.host, r.kind, r.value).catch(() => undefined)
-      }
+      await this.establish(new Set())
       if (!this.sizeSet) this.size = { cols, rows }
       await this.openShell(this.size.cols, this.size.rows)
       this.setStatus('connected')
@@ -115,6 +109,78 @@ export class SshSession {
       const msg = e instanceof CancelledError ? 'Connection cancelled' : this.lastError || (e as Error).message
       this.fail(msg)
     }
+  }
+
+  /**
+   * Open an authenticated SSH transport to this host. When the host has a jump host, that host is
+   * connected first (recursively, so chains work) and this connection runs inside a tunnel through it.
+   * Jump hosts only ever get this transport — never a shell or stats channel.
+   */
+  async establish(chain: Set<string>): Promise<void> {
+    chain.add(this.host.id)
+    if (!this.username) {
+      const res = await this.ask({
+        kind: 'credentials',
+        title: `Username for ${this.host.label}`,
+        message: this.host.label !== this.host.hostname ? this.host.hostname : '',
+        fields: [{ label: 'Username', secret: false }],
+        allowRemember: true,
+        rememberLabel: 'Save this username for the host'
+      })
+      if (!res.ok || !res.values?.[0]) throw new CancelledError()
+      this.username = res.values[0].trim()
+      this.saveUsernameAfterAuth = Boolean(res.remember)
+    }
+
+    const jumpId = this.host.jumpHostId
+    if (jumpId) {
+      const jumpHost = this.deps.getHost(jumpId)
+      if (!jumpHost) throw new Error(`The jump host configured for ${this.host.label} no longer exists`)
+      if (chain.has(jumpId)) throw new Error(`Jump host loop: ${jumpHost.label} is already part of this connection chain`)
+      if (chain.size >= MAX_HOPS) throw new Error('Too many jump hosts in the chain')
+      this.jump = new SshSession(this.id, jumpHost, { ...this.deps, emit: (ev) => this.onJumpEvent(jumpHost, ev) })
+      try {
+        await this.jump.establish(chain)
+      } catch (e) {
+        if (e instanceof CancelledError) throw e
+        throw new Error(`Jump host ${jumpHost.label}: ${(e as Error).message}`)
+      }
+      if (this.closed) throw new CancelledError()
+      this.setStatus('connecting', `Connecting to ${this.host.hostname}:${this.host.port} via ${jumpHost.label}…`)
+      this.sock = await this.jump.forwardOut(this.host.hostname, this.host.port)
+    } else {
+      this.setStatus('connecting', `Connecting to ${this.host.hostname}:${this.host.port}…`)
+      this.sock = await this.openSocket()
+    }
+
+    await this.handshake()
+    for (const r of this.pendingRemember.splice(0)) {
+      await this.deps.remember(this.host, r.kind, r.value).catch(() => undefined)
+    }
+    if (this.saveUsernameAfterAuth) await this.deps.saveUsername(this.host, this.username).catch(() => undefined)
+  }
+
+  /** Progress and failures of the jump connection surface on this session. */
+  private onJumpEvent(jumpHost: Host, ev: SessionEvent): void {
+    if (ev.type === 'status' && (ev.status === 'connecting' || ev.status === 'authenticating')) {
+      this.setStatus(ev.status, `${jumpHost.label}: ${ev.message ?? ''}`)
+    } else if (ev.type === 'closed' && !this.closed && this.status === 'connected') {
+      // everything tunnelled through the jump host is gone with it
+      this.close(`Jump host ${jumpHost.label} disconnected${ev.reason ? `: ${ev.reason}` : ''}`)
+    }
+  }
+
+  /** Open a direct-tcpip channel from this (already authenticated) host to another address. */
+  forwardOut(host: string, port: number): Promise<ClientChannel> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`${this.host.label} timed out reaching ${host}:${port}`)), TUNNEL_TIMEOUT_MS)
+      this.client.forwardOut('127.0.0.1', 0, host, port, (err, ch) => {
+        clearTimeout(timer)
+        if (!err) return resolve(ch)
+        const hint = /prohibited/i.test(err.message) ? ' (TCP forwarding is disabled on that server: AllowTcpForwarding)' : ''
+        reject(new Error(`${this.host.label} could not reach ${host}:${port}: ${err.message}${hint}`))
+      })
+    })
   }
 
   private openSocket(): Promise<Socket> {
@@ -134,6 +200,8 @@ export class SshSession {
         const friendly: Record<string, string> = {
           ECONNREFUSED: 'Connection refused',
           ENOTFOUND: 'Host not found',
+          EAI_AGAIN: 'Could not resolve the host name',
+          EAI_NONAME: 'Host not found',
           EHOSTUNREACH: 'Host unreachable',
           ENETUNREACH: 'Network unreachable',
           ETIMEDOUT: 'Connection timed out'
@@ -517,6 +585,7 @@ export class SshSession {
   }
 
   private teardown(): void {
+    this.jump?.close('Tunnel closed')
     try {
       this.statsChannel?.close()
     } catch {

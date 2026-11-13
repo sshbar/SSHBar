@@ -519,6 +519,10 @@ p {
   background: #8b5cf622;
   color: #c4b5fd;
 }
+.badge.jump {
+  background: #e0af681a;
+  color: #f0c88a;
+}
 .badge.tag {
   background: #7aa2f71c;
   color: #a9c1fb;

@@ -74,14 +74,22 @@ export function parseSshConfig(text: string, baseDir = join(homedir(), '.ssh'), 
 }
 
 /** Turn parsed config into host records for every concrete (non-wildcard) Host alias. */
-export function hostsFromSshConfig(blocks: Block[], env: { hasAgent: boolean; defaultKey?: string }): HostInput[] {
+export type ImportedHost = HostInput & { jumpAlias?: string }
+
+/** `ProxyJump [user@]alias[:port]` → alias, when it is a single hop (chains can't be mapped to one host). */
+export function proxyJumpAlias(value: string | undefined): string | undefined {
+  if (!value || value.includes(',') || value.toLowerCase() === 'none') return undefined
+  return value.replace(/^[^@]*@/, '').replace(/:\d+$/, '')
+}
+
+export function hostsFromSshConfig(blocks: Block[], env: { hasAgent: boolean; defaultKey?: string }): ImportedHost[] {
   const aliases: string[] = []
   for (const b of blocks) {
     for (const p of b.patterns) {
       if (!/[*?!]/.test(p) && !aliases.includes(p)) aliases.push(p)
     }
   }
-  const out: HostInput[] = []
+  const out: ImportedHost[] = []
   for (const alias of aliases) {
     const opts = new Map<string, string>()
     for (const b of blocks) {
@@ -112,10 +120,11 @@ export function hostsFromSshConfig(blocks: Block[], env: { hasAgent: boolean; de
       h.auth.key = { source: 'file', path: env.defaultKey }
     }
     const notes: string[] = []
-    if (opts.has('proxyjump')) notes.push(`ProxyJump ${opts.get('proxyjump')} (not supported yet)`)
-    if (opts.has('proxycommand')) notes.push(`ProxyCommand ${opts.get('proxycommand')} (not supported yet)`)
+    const jumpAlias = proxyJumpAlias(opts.get('proxyjump'))
+    if (opts.has('proxyjump') && !jumpAlias) notes.push(`ProxyJump ${opts.get('proxyjump')} (multi-hop chains must be set up host by host)`)
+    if (opts.has('proxycommand')) notes.push(`ProxyCommand ${opts.get('proxycommand')} (not supported)`)
     h.notes = notes.join('\n')
-    out.push(h)
+    out.push({ ...h, jumpAlias })
   }
   return out
 }

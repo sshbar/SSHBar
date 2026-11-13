@@ -17,6 +17,7 @@ export function emptyHost(): HostInput {
     port: 22,
     username: '',
     auth: structuredClone(DEFAULT_AUTH),
+    jumpHostId: '',
     tags: [],
     notes: ''
   }

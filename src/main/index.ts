@@ -230,13 +230,27 @@ function registerIpc(): void {
     const existing = hosts.list()
     let added = 0
     let skipped = 0
-    for (const h of found) {
-      if (existing.some((e) => e.hostname === h.hostname && e.port === h.port && e.username === h.username)) {
+    const idByAlias = new Map(existing.map((e) => [e.label, e.id]))
+    const pendingJumps: { id: string; alias: string }[] = []
+    for (const { jumpAlias, ...h } of found) {
+      const dup = existing.find((e) => e.hostname === h.hostname && e.port === h.port && e.username === h.username)
+      if (dup) {
+        idByAlias.set(h.label, dup.id)
         skipped++
         continue
       }
-      await hosts.save(h)
+      const saved = await hosts.save(h)
+      idByAlias.set(saved.label, saved.id)
+      if (jumpAlias) pendingJumps.push({ id: saved.id, alias: jumpAlias })
       added++
+    }
+    // second pass: ProxyJump aliases become references to the saved jump host
+    for (const { id, alias } of pendingJumps) {
+      const jumpId = idByAlias.get(alias)
+      const h = hosts.get(id)
+      if (!h) continue
+      if (jumpId && jumpId !== id) await hosts.save({ ...h, jumpHostId: jumpId })
+      else await hosts.save({ ...h, notes: [h.notes, `ProxyJump ${alias} (no host with that name was found)`].filter(Boolean).join('\n') })
     }
     return { added, skipped }
   })
@@ -320,6 +334,11 @@ function registerIpc(): void {
       prompt: askRenderer,
       remember: rememberSecret,
       agentSocket: agentSocketFor,
+      getHost: (hid) => hosts.get(hid),
+      saveUsername: async (h, username) => {
+        const current = hosts.get(h.id)
+        if (current && !current.username) await hosts.save({ ...current, username })
+      },
       emit: emitSession
     })
     sessions.set(id, s)

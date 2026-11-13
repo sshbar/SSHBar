@@ -40,8 +40,10 @@ export function sanitizeHost(input: Partial<HostInput> & Partial<Host>, now = Da
   const hostname = str(input.hostname, 255).trim()
   if (!hostname) throw new Error('Hostname is required')
   if (/[\s/\\]/.test(hostname)) throw new Error('Hostname must not contain spaces or slashes')
+  const id = typeof input.id === 'string' && input.id ? input.id.slice(0, 64) : randomUUID()
+  const jumpHostId = str(input.jumpHostId, 64)
   return {
-    id: typeof input.id === 'string' && input.id ? input.id.slice(0, 64) : randomUUID(),
+    id,
     label: str(input.label, 200).trim() || hostname,
     group: str(input.group, 200).trim(),
     hostname,
@@ -55,6 +57,7 @@ export function sanitizeHost(input: Partial<HostInput> & Partial<Host>, now = Da
       agent: auth.agent,
       agentSocket: str(auth.agentSocket, 4096)
     },
+    jumpHostId: jumpHostId === id ? '' : jumpHostId,
     tags: Array.isArray(input.tags) ? input.tags.filter((t) => typeof t === 'string').map((t) => t.slice(0, 64)).slice(0, 32) : [],
     notes: str(input.notes, 10_000),
     createdAt: typeof input.createdAt === 'number' ? input.createdAt : now,

@@ -122,7 +122,7 @@ function CredentialPrompt({
         {prompt.allowRemember && (
           <label className="check">
             <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-            Save on this device (encrypted with the OS keychain)
+            {prompt.rememberLabel ?? 'Save on this device (encrypted with the OS keychain)'}
           </label>
         )}
         <div className="modal-foot inline">

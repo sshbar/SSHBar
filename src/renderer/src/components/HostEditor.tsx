@@ -58,6 +58,19 @@ export function HostEditor({ initial }: { initial: HostInput }) {
   }, [initial.id])
 
   const groups = useMemo(() => [...new Set(hosts.map((x) => x.group).filter(Boolean))].sort(), [hosts])
+  // Hosts usable as a jump host: not this host, and not one that (indirectly) jumps through this host.
+  const jumpCandidates = useMemo(() => {
+    const byId = new Map(hosts.map((x) => [x.id, x]))
+    const reachesSelf = (start: string): boolean => {
+      const seen = new Set<string>()
+      for (let cur = byId.get(start); cur && !seen.has(cur.id); cur = byId.get(cur.jumpHostId)) {
+        if (cur.id === initial.id) return true
+        seen.add(cur.id)
+      }
+      return false
+    }
+    return hosts.filter((x) => x.id !== initial.id && !(initial.id && reachesSelf(x.id))).sort((a, b) => a.label.localeCompare(b.label))
+  }, [hosts, initial.id])
   const localOk = backend?.available ?? false
   const localTitle = localOk ? `Encrypted with ${backend?.backend}` : `Unavailable: ${backend?.reason ?? ''}`
 
@@ -185,6 +198,19 @@ export function HostEditor({ initial }: { initial: HostInput }) {
           <label className="field">
             <span>Port</span>
             <input type="number" min={1} max={65535} value={h.port} onChange={(e) => set('port', Number(e.target.value))} />
+          </label>
+          <label className="field span-2">
+            <span>Jump host (ProxyJump)</span>
+            <select value={h.jumpHostId} onChange={(e) => set('jumpHostId', e.target.value)}>
+              <option value="">None — connect directly</option>
+              {jumpCandidates.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label} ({c.username ? c.username + '@' : ''}
+                  {c.hostname})
+                </option>
+              ))}
+              {h.jumpHostId && !hosts.some((x) => x.id === h.jumpHostId) && <option value={h.jumpHostId}>(missing host)</option>}
+            </select>
           </label>
         </div>
 

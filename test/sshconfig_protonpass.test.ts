@@ -35,8 +35,17 @@ Match host foo
     expect(by.web.auth).toMatchObject({ method: 'key', key: { source: 'file', path: '~/.ssh/web_ed25519' } })
     // Host * comes first, so its User wins (OpenSSH semantics)
     expect(by.db.username).toBe('defaultuser')
-    expect(by.db.notes).toContain('ProxyJump bastion')
+    expect(by.db.jumpAlias).toBe('bastion')
+    expect(by.db.notes).toBe('')
     expect(by.bastion.auth).toMatchObject({ method: 'key', key: { path: '~/.ssh/id_ed25519' } })
+  })
+
+  it('maps single-hop ProxyJump values to an alias', async () => {
+    const { proxyJumpAlias } = await import('../src/main/sshconfig')
+    expect(proxyJumpAlias('bastion')).toBe('bastion')
+    expect(proxyJumpAlias('ops@bastion:2200')).toBe('bastion')
+    expect(proxyJumpAlias('a,b')).toBeUndefined()
+    expect(proxyJumpAlias('none')).toBeUndefined()
   })
 
   it('prefers the agent when one is running', () => {
