@@ -1,7 +1,8 @@
-import { FolderOpen, LoaderCircle, Pencil, RotateCw, SquareTerminal, TriangleExclamationPoint, Unplug } from 'lucide-react'
+import { ArrowRightLeft, FolderOpen, LoaderCircle, Pencil, RotateCw, SquareTerminal, TriangleExclamationPoint, Unplug } from 'lucide-react'
 import { useStore } from '../store'
 import { TerminalPane } from './TerminalPane'
 import { FileManager } from './FileManager'
+import { PortsPanel } from './PortsPanel'
 import { api } from '../api'
 
 export function SessionView({ id, visible }: { id: string; visible: boolean }) {
@@ -24,6 +25,10 @@ export function SessionView({ id, visible }: { id: string; visible: boolean }) {
           </button>
           <button className={s.view === 'files' ? 'on' : ''} onClick={() => setView(id, 'files')} disabled={!connected && !s.filesOpened}>
             <FolderOpen size={14} /> Files
+          </button>
+          <button className={s.view === 'ports' ? 'on' : ''} onClick={() => setView(id, 'ports')}>
+            <ArrowRightLeft size={14} /> Ports
+            {s.forwards.some((f) => f.status === 'active') && <span className="count">{s.forwards.filter((f) => f.status === 'active').length}</span>}
           </button>
         </div>
         <div className="session-title">
@@ -48,6 +53,12 @@ export function SessionView({ id, visible }: { id: string; visible: boolean }) {
         {s.filesOpened && (
           <div className="pane-stack" style={{ display: s.view === 'files' ? 'flex' : 'none' }}>
             <FileManager sessionId={id} connected={connected} />
+          </div>
+        )}
+
+        {s.view === 'ports' && (
+          <div className="pane-stack" style={{ display: 'flex' }}>
+            <PortsPanel sessionId={id} connected={connected} />
           </div>
         )}
 

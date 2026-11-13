@@ -14,7 +14,7 @@ import type {
   Settings,
   TransferInfo
 } from '../shared/types'
-import { HostStore, sanitizeHost } from './store/hosts'
+import { HostStore, sanitizeForwards, sanitizeHost } from './store/hosts'
 import { SecretStore, type Cipher } from './store/secrets'
 import { SettingsStore } from './store/settings'
 import { KnownHostsStore } from './store/knownHosts'
@@ -395,6 +395,15 @@ function registerIpc(): void {
   handle('ssh:close', (id: string) => {
     sessions.get(str(id))?.close('Disconnected')
   })
+
+  // ----- port forwarding -----
+  handle('fwd:list', (id: string) => sessions.get(str(id))?.listForwards() ?? [])
+  handle('fwd:start', (id: string, f: unknown) => {
+    const [clean] = sanitizeForwards([f])
+    if (!clean) throw new Error('Invalid port forward')
+    return session(str(id)).startForward(clean)
+  })
+  handle('fwd:stop', (id: string, fid: string) => sessions.get(str(id))?.stopForward(str(fid)))
 
   // ----- prompts -----
   ipcMain.on('prompt:respond', (e, id: string, res: PromptResponse) => {

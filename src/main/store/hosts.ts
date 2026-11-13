@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
-import type { CredentialRef, Host, HostInput, KeyRef } from '../../shared/types'
+import type { CredentialRef, Host, HostInput, KeyRef, PortForward } from '../../shared/types'
 import { normalizeAuth } from '../../shared/defaults'
 import { readJsonSync, writeJson } from './jsonFile'
 
@@ -33,6 +33,36 @@ function sanitizeKey(k: unknown): KeyRef {
   return { source: 'file', path: str(r.path, 4096) }
 }
 
+function port(v: unknown, allowZero: boolean): number {
+  const n = Number(v)
+  return Number.isInteger(n) && n >= (allowZero ? 0 : 1) && n < 65536 ? n : -1
+}
+
+export function sanitizeForwards(list: unknown): PortForward[] {
+  if (!Array.isArray(list)) return []
+  const out: PortForward[] = []
+  for (const raw of list.slice(0, 50)) {
+    const f = (raw ?? {}) as Record<string, unknown>
+    const type = f.type === 'remote' || f.type === 'dynamic' ? f.type : f.type === 'local' ? 'local' : null
+    if (!type) continue
+    const bindPort = port(f.bindPort, true)
+    const destPort = type === 'dynamic' ? 0 : port(f.destPort, false)
+    const destHost = type === 'dynamic' ? '' : str(f.destHost, 255).trim()
+    if (bindPort < 0 || destPort < 0 || (type !== 'dynamic' && !destHost)) continue
+    out.push({
+      id: typeof f.id === 'string' && f.id ? f.id.slice(0, 64) : randomUUID(),
+      type,
+      label: str(f.label, 100),
+      bindAddress: str(f.bindAddress, 255).trim() || '127.0.0.1',
+      bindPort,
+      destHost,
+      destPort,
+      autoStart: f.autoStart !== false
+    })
+  }
+  return out
+}
+
 /** Validate and normalise untrusted host data (from the renderer, an import file or a sync payload). */
 export function sanitizeHost(input: Partial<HostInput> & Partial<Host>, now = Date.now()): Host {
   const port = Number(input.port)
@@ -58,6 +88,7 @@ export function sanitizeHost(input: Partial<HostInput> & Partial<Host>, now = Da
       agentSocket: str(auth.agentSocket, 4096)
     },
     jumpHostId: jumpHostId === id ? '' : jumpHostId,
+    forwards: sanitizeForwards(input.forwards),
     tags: Array.isArray(input.tags) ? input.tags.filter((t) => typeof t === 'string').map((t) => t.slice(0, 64)).slice(0, 32) : [],
     notes: str(input.notes, 10_000),
     createdAt: typeof input.createdAt === 'number' ? input.createdAt : now,

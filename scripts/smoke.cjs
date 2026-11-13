@@ -124,8 +124,35 @@ app.on('browser-window-created', (_e, win) => {
         await shot('9-jump-session')
       }
 
+      // Port forwarding through the UI: local forward to the server's own sshd, then use it
       await js(`document.querySelector('.tab:not(.tab-home)').click()`)
-      await js(`[...document.querySelectorAll('.session-toolbar .segmented button')].find(b => /Terminal/.test(b.textContent)).click()`)
+      await sleep(200)
+      const visibleSession = `[...document.querySelectorAll('.session')].find(s => s.style.display !== 'none')`
+      await js(`[...${visibleSession}.querySelectorAll('.session-toolbar .segmented button')].find(b => /Ports/.test(b.textContent)).click()`)
+      await waitFor(`[...document.querySelectorAll('.ports .btn')].some(b => /New forward/.test(b.textContent))`)
+      await js(`[...document.querySelectorAll('.ports .btn')].find(b => /New forward/.test(b.textContent)).click()`)
+      await js(`(() => {
+        const set = (el, v) => { Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })) }
+        const [bindAddr, bindPort, destHost, destPort, label] = document.querySelectorAll('.fwd-form input:not([type=checkbox])')
+        set(bindPort, '0'); set(destHost, '127.0.0.1'); set(destPort, '2222'); set(label, 'sshd via tunnel')
+      })()`)
+      await sleep(100)
+      await js(`[...document.querySelectorAll('.fwd-form .btn')].find(b => /Add forward/.test(b.textContent)).click()`)
+      await waitFor(`/Active/.test(document.querySelector('.fwd-row')?.textContent || '')`, 10000)
+      const desc = await js(`document.querySelector('.fwd-row .mono').textContent`)
+      const boundPort = Number(/127\.0\.0\.1:(\d+)/.exec(desc)[1])
+      const banner = await new Promise((resolve, reject) => {
+        const sock = require('node:net').connect(boundPort, '127.0.0.1')
+        sock.once('data', (d) => { resolve(d.toString().trim()); sock.destroy() })
+        sock.once('error', reject)
+        setTimeout(() => reject(new Error('no banner through the forward')), 5000)
+      })
+      if (!/^SSH-2\.0-/.test(banner)) throw new Error('unexpected data through the forward: ' + banner)
+      log('forward', desc, '->', banner)
+      await sleep(400)
+      await shot('10-ports')
+
+      await js(`[...${visibleSession}.querySelectorAll('.session-toolbar .segmented button')].find(b => /Terminal/.test(b.textContent)).click()`)
       await js(`document.querySelectorAll('.rail-btn')[0].click()`)
       await js(`document.querySelector('.btn.primary').click()`) // New host
       await waitFor(`document.querySelector('.modal')`)

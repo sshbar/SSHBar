@@ -344,3 +344,142 @@ dj('jump hosts (ProxyJump)', () => {
     t.s.close()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Port forwarding (needs AllowTcpForwarding on the server: scripts/it-server.sh enables it)
+// ---------------------------------------------------------------------------
+dj('port forwarding', () => {
+  const net = require('node:net') as typeof import('node:net')
+
+  /** connect to host:port and resolve with the first line received */
+  const firstLine = (port: number, send?: Buffer, host = '127.0.0.1'): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const s = net.connect(port, host)
+      let data = Buffer.alloc(0)
+      s.on('connect', () => send && s.write(send))
+      s.on('data', (d) => {
+        data = Buffer.concat([data, d])
+        const i = data.indexOf('\n')
+        if (i >= 0) {
+          resolve(data.subarray(0, i).toString().trim())
+          s.destroy()
+        }
+      })
+      s.on('error', reject)
+      setTimeout(() => reject(new Error('no data')), 5000)
+    })
+
+  async function connected(forwards: Host['forwards'] = []) {
+    const t = harness({ auth: keyAuth(), forwards }, [trust, trust])
+    void t.s.start(80, 24)
+    expect(await t.settled).toBe('connected')
+    return t
+  }
+
+  it('local forward (-L) reaches a server-side service', async () => {
+    const t = await connected()
+    const st = await t.s.startForward({ id: 'l1', type: 'local', label: '', bindAddress: '127.0.0.1', bindPort: 0, destHost: 'sb-target', destPort: 2222, autoStart: false })
+    expect(st).toMatchObject({ status: 'active' })
+    expect(await firstLine(st.boundPort!)).toMatch(/^SSH-2\.0-OpenSSH/)
+    // stopping closes the listener
+    t.s.stopForward('l1')
+    await expect(firstLine(st.boundPort!)).rejects.toThrow()
+    t.s.close()
+  })
+
+  it('reports a local port that is already taken', async () => {
+    const blocker = net.createServer().listen(0, '127.0.0.1')
+    await new Promise((r) => blocker.once('listening', r))
+    const busy = (blocker.address() as import('node:net').AddressInfo).port
+    const t = await connected()
+    const st = await t.s.startForward({ id: 'l2', type: 'local', label: '', bindAddress: '127.0.0.1', bindPort: busy, destHost: '127.0.0.1', destPort: 2222, autoStart: false })
+    expect(st).toMatchObject({ status: 'error' })
+    expect(st.error).toMatch(/already in use/)
+    blocker.close()
+    t.s.close()
+  })
+
+  it('remote forward (-R) lets the server reach a service on this computer', async () => {
+    const echo = net.createServer((s) => s.on('data', (d) => s.end('pong ' + d.toString())))
+    await new Promise<void>((r) => echo.listen(0, '127.0.0.1', () => r()))
+    const localPort = (echo.address() as import('node:net').AddressInfo).port
+    const t = await connected()
+    const st = await t.s.startForward({ id: 'r1', type: 'remote', label: '', bindAddress: '127.0.0.1', bindPort: 0, destHost: '127.0.0.1', destPort: localPort, autoStart: false })
+    expect(st).toMatchObject({ status: 'active' })
+    expect(st.boundPort).toBeGreaterThan(0)
+    const out = await new Promise<string>((resolve, reject) => {
+      t.s.client.exec(`bash -c 'exec 3<>/dev/tcp/127.0.0.1/${st.boundPort}; echo ping >&3; cat <&3'`, (err, ch) => {
+        if (err) return reject(err)
+        let o = ''
+        ch.on('data', (d: Buffer) => (o += d.toString()))
+        ch.on('close', () => resolve(o.trim()))
+      })
+    })
+    expect(out).toBe('pong ping')
+    echo.close()
+    t.s.close()
+  })
+
+  it('dynamic forward (-D) is a working SOCKS5 proxy with server-side name resolution', async () => {
+    const t = await connected()
+    const st = await t.s.startForward({ id: 'd1', type: 'dynamic', label: '', bindAddress: '127.0.0.1', bindPort: 0, destHost: '', destPort: 0, autoStart: false })
+    expect(st).toMatchObject({ status: 'active' })
+    const viaSocks = (atyp: 'domain' | 'ipv4', host: string, port: number): Promise<{ reply: number; line: string }> =>
+      new Promise((resolve, reject) => {
+        const s = net.connect(st.boundPort!, '127.0.0.1')
+        let stage = 0
+        let buf = Buffer.alloc(0)
+        s.on('connect', () => s.write(Buffer.from([5, 1, 0])))
+        s.on('data', (d) => {
+          buf = Buffer.concat([buf, d])
+          if (stage === 0 && buf.length >= 2) {
+            expect([...buf.subarray(0, 2)]).toEqual([5, 0])
+            buf = buf.subarray(2)
+            stage = 1
+            const p = Buffer.alloc(2)
+            p.writeUInt16BE(port)
+            const addr = atyp === 'domain' ? Buffer.concat([Buffer.from([3, host.length]), Buffer.from(host)]) : Buffer.from([1, ...host.split('.').map(Number)])
+            s.write(Buffer.concat([Buffer.from([5, 1, 0]), addr, p]))
+          }
+          if (stage === 1 && buf.length >= 10) {
+            const reply = buf[1]
+            buf = buf.subarray(10)
+            stage = 2
+            if (reply !== 0) {
+              resolve({ reply, line: '' })
+              s.destroy()
+            }
+          }
+          if (stage === 2) {
+            const i = buf.indexOf('\n')
+            if (i >= 0) {
+              resolve({ reply: 0, line: buf.subarray(0, i).toString().trim() })
+              s.destroy()
+            }
+          }
+        })
+        s.on('error', reject)
+        setTimeout(() => reject(new Error('socks timeout')), 6000)
+      })
+    expect(await viaSocks('domain', 'sb-target', 2222)).toMatchObject({ reply: 0, line: expect.stringMatching(/^SSH-2\.0/) })
+    expect(await viaSocks('ipv4', '127.0.0.1', 2222)).toMatchObject({ reply: 0, line: expect.stringMatching(/^SSH-2\.0/) })
+    expect((await viaSocks('ipv4', '127.0.0.1', 1)).reply).not.toBe(0)
+    t.s.close()
+  })
+
+  it('starts saved forwards automatically on connect and stops them on disconnect', async () => {
+    const changes: string[] = []
+    const t = await connected([
+      { id: 'auto', type: 'local', label: 'db', bindAddress: '127.0.0.1', bindPort: 0, destHost: '127.0.0.1', destPort: 2222, autoStart: true },
+      { id: 'manual', type: 'local', label: 'off', bindAddress: '127.0.0.1', bindPort: 0, destHost: '127.0.0.1', destPort: 2222, autoStart: false }
+    ])
+    await waitFor(() => t.s.listForwards().some((f) => f.id === 'auto' && f.status === 'active'))
+    expect(t.s.listForwards().map((f) => f.id)).toEqual(['auto'])
+    const port = t.s.listForwards()[0].boundPort!
+    expect(await firstLine(port)).toMatch(/^SSH-2\.0/)
+    t.events.filter((e) => e.type === 'forwards').forEach(() => changes.push('x'))
+    expect(changes.length).toBeGreaterThan(0)
+    t.s.close()
+    await expect(firstLine(port)).rejects.toThrow()
+  })
+})

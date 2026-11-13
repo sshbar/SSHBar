@@ -1,6 +1,8 @@
 import type {
   DirListing,
   FileSyncStatus,
+  ForwardState,
+  PortForward,
   Host,
   HostInput,
   ImportResult,
@@ -82,6 +84,9 @@ export interface SSHBuddyApi {
     write(sessionId: string, data: string): void
     resize(sessionId: string, cols: number, rows: number): void
     close(sessionId: string): Promise<void>
+    listForwards(sessionId: string): Promise<ForwardState[]>
+    startForward(sessionId: string, forward: PortForward): Promise<ForwardState>
+    stopForward(sessionId: string, forwardId: string): Promise<void>
     onEvent(cb: (ev: SessionEvent) => void): Unsubscribe
   }
 

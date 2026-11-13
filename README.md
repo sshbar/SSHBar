@@ -9,6 +9,7 @@ A cross-platform SSH client in the spirit of Termius, built with Electron, React
 | **Cross-platform** | Windows, macOS and Linux (Electron). Installers via electron-builder: NSIS, DMG, AppImage/deb. |
 | **Central host list** | Hosts with groups, tags, notes and search. Import from `~/.ssh/config` or JSON. Share them between your computers **without a server**, either through an **encrypted sync file** in any folder you already sync, or through **Proton Pass**. |
 | **Jump hosts** | Reach private servers through a bastion (ProxyJump). Chains like A → B → C work, every hop's host key is verified, and loops are detected. `ProxyJump` entries in `~/.ssh/config` are mapped when importing. |
+| **Port forwarding** | Local (`-L`), remote (`-R`) and dynamic SOCKS5 (`-D`) forwards, saved per host and optionally started on connect. A Ports tab shows live status and connection counts. Listeners bind to `127.0.0.1` unless you choose otherwise, with a warning. `LocalForward`/`RemoteForward`/`DynamicForward` lines are imported from `~/.ssh/config`. |
 | **Authentication** | Password, SSH key (file, pasted, or from Proton Pass), SSH agent (system, Proton Pass agent, custom socket), plus keyboard-interactive / 2FA prompts. Encrypted keys are supported. If a key is rejected it falls back to asking for a password, like OpenSSH. |
 | **Proton Pass** | Passwords come from Login items and keys from SSH Key items, fetched on demand via `pass-cli` and kept in memory only. The `pass-cli ssh-agent` daemon can be started from the app. Host sync uses a Proton Pass note. |
 | **Terminal** | xterm.js with 256 colours and truecolor, clickable links, copy/paste, multiple tabs and reconnect. |
@@ -94,7 +95,7 @@ npm run test:smoke   # headless Electron run: connect, type in the terminal, ope
 SSHBUDDY_PP_LIVE=1 npx vitest run test/protonpass.live.test.ts   # read-only checks against your real pass-cli
 ```
 
-The integration suite covers jump hosts (to a server that is only reachable through the bastion), password, retry and cancel, plain and encrypted keys, keys from Proton Pass, key-to-password fallback, host-key change detection, connection-refused errors, live stats, and SFTP folder upload/download round-trips with byte-level comparison and cancellation. Host sync runs against a fake `pass-cli` (`test/fixtures/fake-pass-cli.mjs`) that simulates two devices.
+The integration suite covers port forwarding (local, remote and SOCKS5 with server-side name resolution, auto-start, port-in-use errors), jump hosts (to a server that is only reachable through the bastion), password, retry and cancel, plain and encrypted keys, keys from Proton Pass, key-to-password fallback, host-key change detection, connection-refused errors, live stats, and SFTP folder upload/download round-trips with byte-level comparison and cancellation. Host sync runs against a fake `pass-cli` (`test/fixtures/fake-pass-cli.mjs`) that simulates two devices.
 
 ## Architecture
 
@@ -119,7 +120,7 @@ The renderer runs sandboxed with `contextIsolation` and has no Node access. Save
 
 ## Known limitations / next steps
 
-- Port forwarding isn't implemented yet. `ProxyCommand` isn't supported; imported hosts that use it get a note.
+- `ProxyCommand` isn't supported; imported hosts that use it get a note. The SOCKS proxy supports SOCKS5 CONNECT only (no SOCKS4, no UDP).
 - Live CPU/RAM/network stats need a Linux server. macOS/BSD hosts show disk usage only.
 - Only tested on Linux so far. Windows and macOS builds are configured but unverified.
 - Proton Pass sync was tested against a simulated CLI. Its write commands (`item create note`, `item update --field`) come from `pass-cli --help` but haven't been run against a real vault yet.

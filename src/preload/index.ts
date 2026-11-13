@@ -70,6 +70,9 @@ const api: SSHBuddyApi = {
     write: (id, data) => ipcRenderer.send('ssh:write', id, data),
     resize: (id, cols, rows) => ipcRenderer.send('ssh:resize', id, cols, rows),
     close: (id) => invoke('ssh:close', id),
+    listForwards: (id) => invoke('fwd:list', id),
+    startForward: (id, f) => invoke('fwd:start', id, f),
+    stopForward: (id, fid) => invoke('fwd:stop', id, fid),
     onEvent: (cb) => on('ssh:event', cb)
   },
 

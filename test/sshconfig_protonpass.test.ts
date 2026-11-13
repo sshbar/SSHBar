@@ -89,3 +89,24 @@ describe('Proton Pass item extraction', () => {
     expect(() => extractSshKey({ item: { content: { content: { Login: {} } } } })).toThrow(/not an SSH key/)
   })
 })
+
+describe('~/.ssh/config port forwards', () => {
+  it('imports LocalForward, RemoteForward and DynamicForward lines', async () => {
+    const { hostsFromSshConfig, parseSshConfig } = await import('../src/main/sshconfig')
+    const cfg = `Host dev
+  HostName dev.example
+  LocalForward 5432 db.internal:5432
+  LocalForward 0.0.0.0:8080 localhost:80
+  RemoteForward 9000 localhost:3000
+  DynamicForward 1080
+  LocalForward garbage
+`
+    const [h] = hostsFromSshConfig(parseSshConfig(cfg, '/x'), { hasAgent: false })
+    expect(h.forwards.map(({ id: _id, ...f }) => f)).toEqual([
+      { type: 'local', label: '', bindAddress: '127.0.0.1', bindPort: 5432, destHost: 'db.internal', destPort: 5432, autoStart: true },
+      { type: 'local', label: '', bindAddress: '0.0.0.0', bindPort: 8080, destHost: 'localhost', destPort: 80, autoStart: true },
+      { type: 'remote', label: '', bindAddress: '127.0.0.1', bindPort: 9000, destHost: 'localhost', destPort: 3000, autoStart: true },
+      { type: 'dynamic', label: '', bindAddress: '127.0.0.1', bindPort: 1080, destHost: '', destPort: 0, autoStart: true }
+    ])
+  })
+})

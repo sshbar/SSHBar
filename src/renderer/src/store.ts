@@ -1,10 +1,10 @@
 import { create } from 'zustand'
-import type { FileSyncStatus, Host, HostInput, HostStats, PromptRequest, SessionStatus, Settings, TransferInfo } from '../../shared/types'
+import type { FileSyncStatus, ForwardState, Host, HostInput, HostStats, PromptRequest, SessionStatus, Settings, TransferInfo } from '../../shared/types'
 import { api } from './api'
 import { disposeTerminal, pushTerminalData } from './terminalBus'
 import { errorText } from './format'
 
-export type SessionView = 'terminal' | 'files'
+export type SessionView = 'terminal' | 'files' | 'ports'
 
 export interface SessionState {
   id: string
@@ -18,6 +18,7 @@ export interface SessionState {
   netHistory: { rx: number; tx: number }[]
   view: SessionView
   filesOpened: boolean
+  forwards: ForwardState[]
 }
 
 export interface Toast {
@@ -47,6 +48,7 @@ interface State {
   reconnect(sessionId: string): Promise<void>
   closeTab(sessionId: string): void
   setView(sessionId: string, view: SessionView): void
+  setForwards(sessionId: string, forwards: ForwardState[]): void
   openEditor(host: HostInput | null): void
   updateSettings(patch: Partial<Settings>): Promise<void>
   toast(kind: Toast['kind'], text: string): void
@@ -99,6 +101,8 @@ export const useStore = create<State>((set, get) => ({
           ? [...s.netHistory, { rx: ev.stats.net.rxBytesPerSec, tx: ev.stats.net.txBytesPerSec }].slice(-HISTORY)
           : s.netHistory
         set({ sessions: { ...get().sessions, [s.id]: { ...s, stats: ev.stats, cpuHistory, netHistory } } })
+      } else if (ev.type === 'forwards') {
+        set({ sessions: { ...get().sessions, [s.id]: { ...s, forwards: ev.forwards } } })
       } else if (ev.type === 'closed') {
         const status = s.status === 'error' ? 'error' : 'closed'
         set({ sessions: { ...get().sessions, [s.id]: { ...s, status, message: ev.reason ?? s.message } } })
@@ -132,7 +136,8 @@ export const useStore = create<State>((set, get) => ({
         cpuHistory: [],
         netHistory: [],
         view: 'terminal',
-        filesOpened: false
+        filesOpened: false,
+        forwards: []
       }
       set({ sessions: { ...get().sessions, [id]: s }, tabs: [...get().tabs, id], active: id })
     } catch (e) {
@@ -158,6 +163,7 @@ export const useStore = create<State>((set, get) => ({
         stats: undefined,
         cpuHistory: [],
         netHistory: [],
+        forwards: [],
         filesOpened: old.view === 'files'
       }
       disposeTerminal(sessionId)
@@ -186,6 +192,11 @@ export const useStore = create<State>((set, get) => ({
     const s = get().sessions[sessionId]
     if (!s) return
     set({ sessions: { ...get().sessions, [sessionId]: { ...s, view, filesOpened: s.filesOpened || view === 'files' } } })
+  },
+
+  setForwards(sessionId, forwards) {
+    const s = get().sessions[sessionId]
+    if (s) set({ sessions: { ...get().sessions, [sessionId]: { ...s, forwards } } })
   },
 
   openEditor(host) {

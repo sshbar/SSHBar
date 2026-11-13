@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactElement } from 'react'
-import { Copy, Import, KeyRound, Lock, Pencil, Plus, Route, Search, Server, Trash, Upload, Plug } from 'lucide-react'
+import { ArrowRightLeft, Copy, Import, KeyRound, Lock, Pencil, Plus, Route, Search, Server, Trash, Upload, Plug } from 'lucide-react'
 import type { Host } from '../../../shared/types'
 import { emptyHost } from '../../../shared/defaults'
 import { api } from '../api'
@@ -154,6 +154,12 @@ export function HostsView() {
                             {badge.text}
                           </span>
                           {badge.proton && <span className="badge proton">Proton Pass</span>}
+                          {h.forwards.length > 0 && (
+                            <span className="badge" title={`${h.forwards.length} port forward(s)`}>
+                              <ArrowRightLeft size={12} />
+                              {h.forwards.length}
+                            </span>
+                          )}
                           {h.jumpHostId && (
                             <span className="badge jump" title="Connects through a jump host">
                               <Route size={12} />

@@ -1,7 +1,8 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join } from 'node:path'
-import type { HostInput } from '../shared/types'
+import { randomUUID } from 'node:crypto'
+import type { HostInput, PortForward } from '../shared/types'
 import { emptyHost } from '../shared/defaults'
 
 interface Block {
@@ -76,6 +77,27 @@ export function parseSshConfig(text: string, baseDir = join(homedir(), '.ssh'), 
 /** Turn parsed config into host records for every concrete (non-wildcard) Host alias. */
 export type ImportedHost = HostInput & { jumpAlias?: string }
 
+/** Split "[bind_address:]port" (also "[::1]:port" and "*:port"). */
+function splitBind(v: string): { address: string; port: number } {
+  const m = /^(?:\[([^\]]+)\]|([^:]+)):(\d+)$/.exec(v)
+  if (m) return { address: (m[1] ?? m[2]) === '*' ? '0.0.0.0' : (m[1] ?? m[2]), port: Number(m[3]) }
+  return { address: '127.0.0.1', port: Number(v) }
+}
+
+/** Parse LocalForward / RemoteForward / DynamicForward values into port forwards. */
+export function parseForward(kind: 'localforward' | 'remoteforward' | 'dynamicforward', value: string): PortForward | null {
+  const [bindSpec, destSpec] = value.trim().split(/\s+/)
+  if (!bindSpec) return null
+  const bind = splitBind(bindSpec)
+  if (!Number.isInteger(bind.port) || bind.port < 0 || bind.port > 65535) return null
+  const base = { id: randomUUID(), label: '', bindAddress: bind.address, bindPort: bind.port, autoStart: true }
+  if (kind === 'dynamicforward') return { ...base, type: 'dynamic', destHost: '', destPort: 0 }
+  if (!destSpec) return null
+  const dest = splitBind(destSpec)
+  if (!dest.port || dest.address === '127.0.0.1' && !destSpec.includes(':')) return null
+  return { ...base, type: kind === 'localforward' ? 'local' : 'remote', destHost: dest.address, destPort: dest.port }
+}
+
 /** `ProxyJump [user@]alias[:port]` → alias, when it is a single hop (chains can't be mapped to one host). */
 export function proxyJumpAlias(value: string | undefined): string | undefined {
   if (!value || value.includes(',') || value.toLowerCase() === 'none') return undefined
@@ -92,11 +114,19 @@ export function hostsFromSshConfig(blocks: Block[], env: { hasAgent: boolean; de
   const out: ImportedHost[] = []
   for (const alias of aliases) {
     const opts = new Map<string, string>()
+    const forwards: PortForward[] = []
     for (const b of blocks) {
       if (!matches(b.patterns, alias)) continue
-      for (const [k, v] of b.options) if (!opts.has(k)) opts.set(k, v)
+      for (const [k, v] of b.options) {
+        // forwards accumulate (every matching line applies); everything else is first-match-wins
+        if (k === 'localforward' || k === 'remoteforward' || k === 'dynamicforward') {
+          const f = parseForward(k, v)
+          if (f) forwards.push(f)
+        } else if (!opts.has(k)) opts.set(k, v)
+      }
     }
     const h = emptyHost()
+    h.forwards = forwards
     h.label = alias
     h.hostname = opts.get('hostname')?.replace(/%h/g, alias) ?? alias
     h.port = Number(opts.get('port')) || 22

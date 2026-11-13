@@ -34,6 +34,7 @@ export interface Host {
   auth: HostAuth
   /** Connect through this saved host (ProxyJump). '' = direct connection. */
   jumpHostId: string
+  forwards: PortForward[]
   tags: string[]
   notes: string
   createdAt: number
@@ -41,6 +42,31 @@ export interface Host {
 }
 
 export type HostInput = Omit<Host, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
+
+export type ForwardType = 'local' | 'remote' | 'dynamic'
+
+export interface PortForward {
+  id: string
+  type: ForwardType
+  label: string
+  /** local/dynamic: address on this computer; remote: address on the server */
+  bindAddress: string
+  /** 0 = pick a free port */
+  bindPort: number
+  /** local: reached from the server; remote: reached from this computer; dynamic: unused */
+  destHost: string
+  destPort: number
+  autoStart: boolean
+}
+
+export interface ForwardState {
+  id: string
+  forward: PortForward
+  status: 'starting' | 'active' | 'error'
+  boundPort?: number
+  error?: string
+  connections: number
+}
 
 export type SecretKind = 'password' | 'key' | 'passphrase'
 
@@ -167,6 +193,7 @@ export type SessionEvent =
   | { type: 'data'; sessionId: string; data: Uint8Array }
   | { type: 'stats'; sessionId: string; stats: HostStats }
   | { type: 'closed'; sessionId: string; reason?: string }
+  | { type: 'forwards'; sessionId: string; forwards: ForwardState[] }
 
 // ---------- Prompts (main -> renderer -> main) ----------
 

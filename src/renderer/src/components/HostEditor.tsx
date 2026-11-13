@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
-import { FolderOpen, KeyRound, Lock, Plug } from 'lucide-react'
+import { FolderOpen, KeyRound, Lock, Plug, Plus, Trash } from 'lucide-react'
 import type { CredentialRef, HostInput, KeyRef, SecretBackendInfo, SecretKind } from '../../../shared/types'
 import { api } from '../api'
 import { useStore } from '../store'
 import { errorText } from '../format'
 import { Modal } from './Modal'
+import { ForwardForm, ForwardPill } from './Forwards'
+import { describeForward } from '../../../shared/forwards'
 import { ProtonPassPicker } from './ProtonPassPicker'
 
 type CredSource = CredentialRef['source']
@@ -51,6 +53,7 @@ export function HostEditor({ initial }: { initial: HostInput }) {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [tagText, setTagText] = useState(initial.tags.join(', '))
+  const [addingForward, setAddingForward] = useState(false)
 
   useEffect(() => {
     void api.secrets.backend().then(setBackend)
@@ -368,6 +371,51 @@ export function HostEditor({ initial }: { initial: HostInput }) {
             )}
           </div>
         )}
+
+        <div className="field">
+          <span>Port forwarding</span>
+          {h.forwards.length > 0 && (
+            <div className="fwd-list compact">
+              {h.forwards.map((f) => (
+                <div key={f.id} className="fwd-row">
+                  <ForwardPill type={f.type} />
+                  <div className="fwd-info">
+                    <div>
+                      {f.label && <b>{f.label} </b>}
+                      <span className="mono small">{describeForward(f)}</span>
+                    </div>
+                  </div>
+                  <label className="check inline small">
+                    <input
+                      type="checkbox"
+                      checked={f.autoStart}
+                      onChange={(e) => set('forwards', h.forwards.map((x) => (x.id === f.id ? { ...x, autoStart: e.target.checked } : x)))}
+                    />
+                    auto
+                  </label>
+                  <button type="button" className="icon-btn danger" title="Remove" onClick={() => set('forwards', h.forwards.filter((x) => x.id !== f.id))}>
+                    <Trash size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {addingForward ? (
+            <ForwardForm
+              onAdd={(f) => {
+                set('forwards', [...h.forwards, f])
+                setAddingForward(false)
+              }}
+              onCancel={() => setAddingForward(false)}
+            />
+          ) : (
+            <div>
+              <button type="button" className="btn sm" onClick={() => setAddingForward(true)}>
+                <Plus size={13} /> Add port forward
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className="grid-2">
           <label className="field span-2">

@@ -8,6 +8,8 @@ import type { KnownHostsStore } from '../store/knownHosts'
 import { fingerprint, keyTypeOf } from '../store/knownHosts'
 import type { ProtonPass } from '../protonpass'
 import { StatsParser, statsCommand } from './stats'
+import { ForwardManager } from './forwarding'
+import type { ForwardState, PortForward } from '../../shared/types'
 
 export type PromptInput = PromptRequest extends infer T ? (T extends { id: string } ? Omit<T, 'id'> : never) : never
 
@@ -60,6 +62,7 @@ export class SshSession {
   /** Connection to the jump host this session is tunnelled through, if any. */
   private jump?: SshSession
   private saveUsernameAfterAuth = false
+  private forwardMgr?: ForwardManager
   private shell?: ClientChannel
   private browseSftp?: Promise<SFTPWrapper>
   private statsChannel?: ClientChannel
@@ -105,6 +108,7 @@ export class SshSession {
       await this.openShell(this.size.cols, this.size.rows)
       this.setStatus('connected')
       this.startStats()
+      for (const f of this.host.forwards.filter((x) => x.autoStart)) void this.startForward(f)
     } catch (e) {
       const msg = e instanceof CancelledError ? 'Connection cancelled' : this.lastError || (e as Error).message
       this.fail(msg)
@@ -525,6 +529,26 @@ export class SshSession {
     })
   }
 
+  // ---------- port forwarding ----------
+
+  private forwards(): ForwardManager {
+    this.forwardMgr ??= new ForwardManager(this.client, (forwards) => this.deps.emit({ type: 'forwards', sessionId: this.id, forwards }))
+    return this.forwardMgr
+  }
+
+  startForward(f: PortForward): Promise<ForwardState> {
+    if (this.closed || this.status !== 'connected') return Promise.reject(new Error('Not connected'))
+    return this.forwards().start(f)
+  }
+
+  stopForward(id: string): void {
+    this.forwardMgr?.stop(id)
+  }
+
+  listForwards(): ForwardState[] {
+    return this.forwardMgr?.list() ?? []
+  }
+
   // ---------- SFTP ----------
 
   /** Shared SFTP channel used for browsing and small operations. */
@@ -585,6 +609,7 @@ export class SshSession {
   }
 
   private teardown(): void {
+    this.forwardMgr?.stopAll()
     this.jump?.close('Tunnel closed')
     try {
       this.statsChannel?.close()
