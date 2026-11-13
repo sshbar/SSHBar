@@ -11,6 +11,8 @@ body.mobile .app {
   padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   padding-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
   padding-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  /* clear of Android's navigation bar; the inset drops to 0 while the keyboard is open */
+  padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
 }
 
 /* side rail -> bottom navigation */
@@ -20,7 +22,7 @@ body.mobile .rail {
   height: auto;
   flex-direction: row;
   justify-content: space-around;
-  padding: 4px 0 calc(4px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  padding: 4px 0;
   border-right: none;
   border-top: 1px solid var(--line);
 }

@@ -7,6 +7,7 @@ import { ArrowDown, ArrowUp, CaseSensitive, X } from 'lucide-react'
 import { api } from '../api'
 import { useStore } from '../store'
 import { attachTerminal, registerTerminalControls } from '../terminalBus'
+import { enableSoftKeyboardInput, enableTouchScroll } from '../touchInput'
 
 const THEME: ITheme = {
   background: '#0d1016',
@@ -158,16 +159,28 @@ export function TerminalPane({ sessionId, visible }: { sessionId: string; visibl
 
     const ro = new ResizeObserver(() => {
       if (el.offsetWidth > 0 && el.offsetHeight > 0) {
+        // when the soft keyboard opens the terminal shrinks: keep the prompt/cursor in view
+        const buf = term.buffer.active
+        const atBottom = buf.viewportY >= buf.baseY
         try {
           fit.fit()
         } catch {
           /* not laid out yet */
         }
+        if (atBottom) term.scrollToBottom()
       }
     })
     ro.observe(el)
 
+    // Touch scrolling (xterm.js only scrolls with a mouse wheel): swipe through the scrollback with
+    // momentum; in full-screen programs (less, vim, htop) a swipe sends arrow keys instead.
+    const removeTouch = isMobile ? enableTouchScroll(el, term, (d) => sendRef.current(d)) : () => undefined
+    // Soft keyboards compose whole words; send each letter as it is typed instead (see enableSoftKeyboardInput)
+    const removeIme = isMobile ? enableSoftKeyboardInput(el, (d) => sendRef.current(d)) : () => undefined
+
     return () => {
+      removeIme()
+      removeTouch()
       ro.disconnect()
       el.removeEventListener('contextmenu', onContext)
       dataSub.dispose()

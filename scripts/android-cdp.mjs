@@ -56,6 +56,7 @@ export async function connectWebView(pkg, port = 9333) {
       }
     },
     insertText: (text) => send('Input.insertText', { text }),
+    _send: send,
     close: () => ws.close()
   }
   return page
