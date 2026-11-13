@@ -22,6 +22,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run typecheck
       - run: npm test
+      - name: Android web bundle builds
+        run: npm run build:mobile
       - name: Integration tests against OpenSSH servers in Docker
         run: |
           eval "$(scripts/it-server.sh)"

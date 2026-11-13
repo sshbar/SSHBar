@@ -72,8 +72,61 @@ jobs:
             dist/*.deb
             dist/*.exe
 
+  android:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HAS_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Signing key check
+        if: env.HAS_KEY != 'true'
+        run: echo "::warning::No ANDROID_KEYSTORE_BASE64 secret — skipping the Android APK (see README → Releases)"
+      - uses: actions/setup-node@v7
+        if: env.HAS_KEY == 'true'
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@v6
+        if: env.HAS_KEY == 'true'
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Set version
+        if: env.HAS_KEY == 'true'
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then VERSION="${GITHUB_REF_NAME#v}"; else VERSION="${INPUT_VERSION:-0.0.0-dev}"; fi
+          npm pkg set version="$VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      - if: env.HAS_KEY == 'true'
+        run: npm ci --ignore-scripts
+      - if: env.HAS_KEY == 'true'
+        run: npm run build:mobile && npx cap sync android
+      - name: Build signed APK
+        if: env.HAS_KEY == 'true'
+        working-directory: android
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          SSHBAR_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SSHBAR_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/sshbar-release.jks"
+          SSHBAR_KEYSTORE="$RUNNER_TEMP/sshbar-release.jks" ./gradlew assembleRelease --no-daemon
+          rm -f "$RUNNER_TEMP/sshbar-release.jks"
+          mkdir -p ../dist && cp app/build/outputs/apk/release/app-release.apk "../dist/SSHbar-$VERSION-android.apk"
+      - uses: actions/upload-artifact@v7
+        if: env.HAS_KEY == 'true'
+        with:
+          name: sshbar-android
+          if-no-files-found: error
+          path: dist/*.apk
+
   release:
-    needs: build
+    needs: [build, android]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     permissions:

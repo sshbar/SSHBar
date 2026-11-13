@@ -12,6 +12,7 @@ A cross-platform SSH client for Linux and Windows: terminal, file manager, port 
 |---|---|
 | Linux | `SSHbar-<version>-x86_64.AppImage` (make it executable and run), or `sshbar_<version>_amd64.deb` |
 | Windows | `SSHbar-Setup-<version>-x64.exe` (installer) or `SSHbar-<version>-portable-x64.exe` (no install) |
+| Android 8+ | `SSHbar-<version>-android.apk`: open it on the phone and allow installing from your browser/files app |
 
 The Windows builds aren't code-signed yet, so SmartScreen may warn: choose *More info → Run anyway*.
 
@@ -154,7 +155,7 @@ The renderer runs sandboxed with `contextIsolation` and has no Node access. Save
 - Live CPU/RAM/network stats need a Linux server. macOS/BSD hosts show disk usage only.
 - Only run-tested on Linux. The Windows installer and portable `.exe` are built and contain the app's icon and version info, but they haven't been run on Windows yet. macOS builds are configured but unverified.
 - Proton Pass sync was tested against a simulated CLI. Its write commands (`item create note`, `item update --field`) come from `pass-cli --help` but haven't been run against a real vault yet.
-- No split panes, broadcast-to-many-sessions or mobile apps yet.
+- Android doesn't have the file manager, port forwarding or imports yet. No split panes or broadcast-to-many-sessions.
 
 ## Releases
 
@@ -164,7 +165,24 @@ Pushing a version tag builds and publishes a release automatically ([`.github/wo
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
-GitHub Actions runs the tests, builds Linux (AppImage, .deb) and Windows (installer, portable) on native runners, and attaches the files and a `SHA256SUMS.txt` to a new release named after the tag. The version inside the apps comes from the tag. A tag with a suffix such as `v0.2.0-beta.1` is published as a pre-release.
+GitHub Actions runs the tests, builds Linux (AppImage, .deb), Windows (installer, portable) and Android (signed APK) on native runners, and attaches the files and a `SHA256SUMS.txt` to a new release named after the tag.
+
+The APK is signed with the project's release key, supplied as repository secrets (Settings → Secrets and variables → Actions): `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS`. Without them the release still publishes, just without the APK. Keep the keystore backed up: updates only install over an app signed with the same key. The version inside the apps comes from the tag. A tag with a suffix such as `v0.2.0-beta.1` is published as a pre-release.
+
+## Android app
+
+The phone app shares the desktop's screens and its host model, with SSH done natively by [sshj](https://github.com/hierynomus/sshj). It has terminal, live stats, jump hosts, password, key and 2FA logins, snippets, and the encrypted sync file through Android's file picker. To get your desktop hosts on the phone:
+
+1. On the computer: **Settings → Encrypted sync file**. Hosts that use Proton Pass keys or passwords need **Share Proton Pass keys and passwords with my phones** turned on, because phones have no Proton Pass CLI.
+2. On the phone: **Settings → Encrypted sync file → Use existing sync file…** Pick the same file (Drive, Dropbox, OneDrive, Proton Drive and Syncthing folders appear in the picker) and enter the master password.
+
+Passwords and keys saved on the phone are encrypted with the Android Keystore. They never change the host settings shared with your computers.
+
+Building from source:
+
+```bash
+JAVA_HOME=<JDK 21> ANDROID_HOME=<Android SDK> npm run android:apk   # debug APK in android/app/build/outputs/apk/debug/
+```
 
 ## Contact & license
 

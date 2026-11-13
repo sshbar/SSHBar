@@ -27,8 +27,21 @@ android {
             excludes += ['META-INF/versions/9/OSGI-INF/MANIFEST.MF', 'META-INF/DEPENDENCIES', 'META-INF/LICENSE*', 'META-INF/NOTICE*', 'META-INF/INDEX.LIST']
         }
     }
+    // Release signing comes from the environment (GitHub secrets in CI), never from the repository.
+    def releaseKeystore = System.getenv('SSHBAR_KEYSTORE')
+    signingConfigs {
+        if (releaseKeystore) {
+            release {
+                storeFile file(releaseKeystore)
+                storePassword System.getenv('SSHBAR_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('SSHBAR_KEY_ALIAS') ?: 'sshbar'
+                keyPassword System.getenv('SSHBAR_KEY_PASSWORD') ?: System.getenv('SSHBAR_KEYSTORE_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
+            if (releaseKeystore) signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
