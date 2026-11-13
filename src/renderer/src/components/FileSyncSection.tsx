@@ -83,7 +83,7 @@ export function FileSyncSection() {
         <>
           <p className="muted small">
             {api.platform === 'android'
-              ? 'Choose “Use existing sync file” and pick the file your computer created (Drive, Dropbox and Syncthing folders all appear in the picker), then enter the same master password.'
+              ? 'Choose “Use existing sync file”, then in the picker tap ☰ (top left) to see Google Drive, OneDrive, Proton Drive, Dropbox and other apps that share files. For a NAS (SMB) share, install “CIFS Documents Provider” first so the share appears there too. Enter the same master password as on your computer.'
               : 'Put the file in any folder your computers already sync — Dropbox, OneDrive, iCloud Drive, Syncthing, Proton Drive or a NAS share. No server or account is needed. Everything in it is encrypted with your master password (scrypt + AES-256-GCM).'}
           </p>
           <div className="row gap wrap">
