@@ -27,6 +27,7 @@ import { hostsFromSshConfig, parseSshConfig } from './sshconfig'
 import { syncHosts } from './sync'
 import { FileSync } from './fileSync'
 import { SnippetStore } from './store/snippets'
+import { convertTermix, isTermixExport } from './importers/termix'
 
 // ---------------------------------------------------------------------------
 // Bootstrapping
@@ -286,16 +287,24 @@ function registerIpc(): void {
   })
   handle('hosts:importJson', async (): Promise<ImportResult> => {
     if (!win) return { added: 0, skipped: 0 }
-    const res = await dialog.showOpenDialog(win, { title: 'Import hosts', filters: [{ name: 'JSON', extensions: ['json'] }], properties: ['openFile'] })
+    const res = await dialog.showOpenDialog(win, {
+      title: 'Import hosts (SSHBuddy or Termix export)',
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+      properties: ['openFile']
+    })
     if (res.canceled || !res.filePaths[0]) return { added: 0, skipped: 0 }
     const raw = JSON.parse(await fs.readFile(res.filePaths[0], 'utf8')) as { hosts?: unknown[] }
-    const existingIds = new Set(hosts.list().map((h) => h.id))
+    // Termix exports are recognised and converted (they contain no passwords or keys)
+    const incoming = isTermixExport(raw) ? convertTermix(raw).hosts : (raw.hosts ?? [])
+    const existing = hosts.list()
+    const existingIds = new Set(existing.map((h) => h.id))
     let added = 0
     let skipped = 0
-    for (const h of raw.hosts ?? []) {
+    for (const h of incoming) {
       try {
         const clean = sanitizeHost(h as Host)
-        if (existingIds.has(clean.id)) {
+        const dup = existing.some((e) => e.hostname === clean.hostname && e.port === clean.port && e.username === clean.username)
+        if (existingIds.has(clean.id) || dup) {
           skipped++
           continue
         }

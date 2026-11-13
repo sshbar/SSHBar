@@ -28,6 +28,18 @@ npm run build && npm start   # run the production build
 
 Requires Node 20+ (tested with Node 24). With npm 11 the Electron binary downloads on first run.
 
+## Importing from Termix
+
+**Hosts → Import** accepts a Termix host export directly. Folders become groups, and usernames from Termix credentials are kept. Termix exports contain no passwords or keys, so password hosts ask on first connect (tick *Save on this device*). Hosts that used a key get a note naming the Termix credential.
+
+To give all key-based hosts a Proton Pass SSH key in one go, convert first:
+
+```bash
+node --no-warnings scripts/convert-termix.mjs termix-hosts.json sshbuddy-hosts.json --pp-key "Personal/My SSH Key"
+```
+
+Then import `sshbuddy-hosts.json`. Only the Proton Pass item reference is written, never the key. Importing the same hosts twice skips the duplicates.
+
 ## Sharing hosts between devices (no server)
 
 ### Encrypted sync file (recommended)
