@@ -55,7 +55,7 @@ export function App() {
   const activeSession = sessions[active]
 
   return (
-    <div className="app">
+    <div className={`app ${activeSession ? 'in-session' : ''}`}>
       <nav className="rail">
         <div className="rail-logo" title="SSHbar">
           <SquareTerminal size={22} />

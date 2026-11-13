@@ -162,6 +162,25 @@ body.mobile .overlay-card {
   margin: 0 12px;
 }
 
+/* terminal on top, key row underneath (just above the soft keyboard) */
+.terminal-wrap.with-keys {
+  flex-direction: column;
+}
+.terminal-wrap.with-keys .terminal-host {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+/* in a session the bottom navigation would cost terminal rows; the Hosts tab at the top goes back */
+body.mobile .app.in-session .rail {
+  display: none;
+}
+body.mobile .statsbar::-webkit-scrollbar,
+body.mobile .term-keys::-webkit-scrollbar,
+body.mobile .tabbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* extra keys row above the soft keyboard */
 .term-keys {
   display: flex;
@@ -192,6 +211,19 @@ body.mobile .overlay-card {
 }
 .term-keys button:active {
   background: var(--bg-4);
+}
+
+/* stats bar: under the tabs on phones, so the key row sits right on top of the keyboard */
+body.mobile .tabbar {
+  order: 0;
+}
+body.mobile .statsbar {
+  order: 1;
+  border-top: none;
+  border-bottom: 1px solid var(--line);
+}
+body.mobile .content {
+  order: 2;
 }
 
 /* stats bar: scroll sideways instead of squeezing */
