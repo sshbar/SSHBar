@@ -25,6 +25,7 @@ import { TransferManager } from './transfers'
 import { localList, localMkdir, localRename, localRoots } from './localfs'
 import { hostsFromSshConfig, parseSshConfig } from './sshconfig'
 import { syncHosts } from './sync'
+import { FileSync } from './fileSync'
 
 // ---------------------------------------------------------------------------
 // Bootstrapping
@@ -164,8 +165,14 @@ async function runSync() {
   }
 }
 
+const fileSync = new FileSync({ hosts, secrets, settings, onStatus: (s) => send('fileSync:status', s) })
+secrets.onChange(() => {
+  if (!fileSync.applying) fileSync.scheduleSync()
+})
+
 hosts.onChange((list) => {
   send('hosts:changed', list)
+  if (!fileSync.applying) fileSync.scheduleSync()
   if (syncing || !settings.get().sync.enabled) return
   if (syncTimer) clearTimeout(syncTimer)
   syncTimer = setTimeout(() => void runSync(), 3000)
@@ -320,6 +327,40 @@ function registerIpc(): void {
   handle('pp:agentStart', (shareId?: string) => protonPass.agentStart(agentSock(), shareId || undefined))
   handle('pp:agentStop', () => protonPass.agentStop(agentSock()))
   handle('pp:sync', () => runSync())
+
+  // ----- encrypted sync file -----
+  handle('fileSync:status', () => fileSync.status())
+  handle('fileSync:choosePath', async (mode: 'create' | 'open') => {
+    if (!win) return null
+    if (mode === 'create') {
+      const res = await dialog.showSaveDialog(win, {
+        title: 'Create sync file — pick a folder your devices sync (Dropbox, Syncthing, NAS…)',
+        defaultPath: join(app.getPath('documents'), 'sshbuddy-sync.json'),
+        filters: [{ name: 'SSHBuddy sync file', extensions: ['json'] }]
+      })
+      return res.canceled ? null : (res.filePath ?? null)
+    }
+    const res = await dialog.showOpenDialog(win, {
+      title: 'Open an existing SSHBuddy sync file',
+      filters: [{ name: 'SSHBuddy sync file', extensions: ['json'] }],
+      properties: ['openFile']
+    })
+    return res.canceled ? null : (res.filePaths[0] ?? null)
+  })
+  handle('fileSync:enable', (opts: { path: string; password: string; includeSecrets: boolean; rememberPassword: boolean; create: boolean }) =>
+    fileSync.enable({
+      path: str(opts?.path),
+      password: str(opts?.password),
+      includeSecrets: Boolean(opts.includeSecrets),
+      rememberPassword: Boolean(opts.rememberPassword),
+      create: Boolean(opts.create)
+    })
+  )
+  handle('fileSync:unlock', (password: string, remember: boolean) => fileSync.unlock(str(password), Boolean(remember)))
+  handle('fileSync:disable', () => fileSync.disable())
+  handle('fileSync:syncNow', () => fileSync.sync())
+  handle('fileSync:changePassword', (pw: string) => fileSync.changePassword(str(pw)))
+  handle('fileSync:setIncludeSecrets', (v: boolean) => fileSync.setIncludeSecrets(Boolean(v)))
 
   // ----- SSH -----
   handle('ssh:open', (hostId: string, cols: number, rows: number) => {
@@ -497,12 +538,14 @@ app.whenReady().then(() => {
   buildMenu()
   createWindow()
   if (settings.get().sync.enabled) setTimeout(() => void runSync(), 1500)
+  void fileSync.init()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
 app.on('before-quit', () => {
+  fileSync.dispose()
   for (const s of sessions.values()) s.close('Application closed')
 })
 

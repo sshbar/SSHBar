@@ -550,6 +550,34 @@ p {
   pointer-events: auto;
 }
 
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  margin-bottom: 16px;
+  border-radius: var(--radius);
+  border: 1px solid #e0af6855;
+  background: #e0af6812;
+  color: var(--text);
+}
+.banner > span {
+  flex: 1;
+}
+.banner > svg {
+  color: var(--warn);
+}
+.banner.err {
+  border-color: #f7768e55;
+  background: #f7768e10;
+}
+.path-line {
+  display: block;
+  padding: 7px 10px;
+  word-break: break-all;
+  user-select: all;
+}
+
 /* ---------- modal ---------- */
 .modal-backdrop {
   position: fixed;

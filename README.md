@@ -7,7 +7,7 @@ A cross-platform SSH client in the spirit of Termius, built with Electron, React
 | | |
 |---|---|
 | **Cross-platform** | Windows, macOS and Linux (Electron). Installers via electron-builder: NSIS, DMG, AppImage/deb. |
-| **Central host list** | Hosts with groups, tags, notes and search. Import from `~/.ssh/config` or JSON. Optional **sync across devices through Proton Pass** (end-to-end encrypted). |
+| **Central host list** | Hosts with groups, tags, notes and search. Import from `~/.ssh/config` or JSON. Share them between your computers **without a server**, either through an **encrypted sync file** in any folder you already sync, or through **Proton Pass**. |
 | **Jump hosts** | Reach private servers through a bastion (ProxyJump). Chains like A → B → C work, every hop's host key is verified, and loops are detected. `ProxyJump` entries in `~/.ssh/config` are mapped when importing. |
 | **Authentication** | Password, SSH key (file, pasted, or from Proton Pass), SSH agent (system, Proton Pass agent, custom socket), plus keyboard-interactive / 2FA prompts. Encrypted keys are supported. If a key is rejected it falls back to asking for a password, like OpenSSH. |
 | **Proton Pass** | Passwords come from Login items and keys from SSH Key items, fetched on demand via `pass-cli` and kept in memory only. The `pass-cli ssh-agent` daemon can be started from the app. Host sync uses a Proton Pass note. |
@@ -25,6 +25,22 @@ npm run build && npm start   # run the production build
 ```
 
 Requires Node 20+ (tested with Node 24). With npm 11 the Electron binary downloads on first run.
+
+## Sharing hosts between devices (no server)
+
+### Encrypted sync file (recommended)
+
+**Settings → Encrypted sync file → Create sync file…** and save it in a folder that syncs between your computers: Dropbox, OneDrive, iCloud Drive, Google Drive, Syncthing, Proton Drive, a NAS share, or a USB stick. Choose a master password. On your other computers, use **Use existing sync file…** and enter the same password.
+
+- The file is a JSON envelope: scrypt (N=2¹⁷, r=8) derives a key from the master password, and AES-256-GCM encrypts the content. The header is authenticated too. Without the password the file shows nothing, not even host names.
+- It can include the passwords, keys and passphrases you saved on a device (on by default, per-device toggle). A device with the toggle off still leaves other devices' secrets in the file alone.
+- Every device keeps its own local copy and works offline. When the file changes, it merges per host (newest edit wins, deletions propagate). It notices changes through a file watcher, plus a 30 s poll for network shares.
+- The master password can be remembered in the OS keychain, so you type it once per device. After a password change, other devices show "locked" until you enter the new one.
+- An existing file is never overwritten. Pointing a new device at it with the wrong password just fails.
+
+### Proton Pass sync
+
+See below. The host list goes into a Proton Pass note, and secrets stay as references to Proton Pass items.
 
 ## Proton Pass integration
 
@@ -55,6 +71,7 @@ All files are in the app data directory (`~/.config/SSHBuddy` on Linux, `%APPDAT
 | `secrets.json` | Passwords, keys and passphrases you chose to *save on this device*, encrypted with Electron `safeStorage`: macOS Keychain, Windows DPAPI, or libsecret/KWallet on Linux. If Linux has no keyring, saving is disabled instead of falling back to plain text. |
 | `known_hosts.json` | Host keys you trusted in SSHBuddy. |
 | `settings.json` | Preferences. |
+| *your sync file* | Optional, wherever you put it. Encrypted with your master password. |
 
 Set `SSHBUDDY_DATA_DIR` to use a different directory, for example for a portable install or tests.
 
@@ -70,7 +87,7 @@ npm run dist:dir     # unpacked app for the current OS, quickest check
 ## Tests
 
 ```bash
-npm test             # unit tests: stats parser, known_hosts, sync merge, ssh_config import, Proton Pass parsing
+npm test             # unit tests: stats parser, known_hosts, sync merge, encrypted sync file (multi-device), ssh_config import, Proton Pass parsing
 npm run test:it      # starts OpenSSH servers in Docker (scripts/it-server.sh) and runs SSH/SFTP/jump-host integration tests
 npm run test:smoke   # headless Electron run: connect, type in the terminal, open files/settings, save screenshots
                      # set ELECTRON_RENDERER_URL=<vite dev server url> to run it against React dev mode (StrictMode)

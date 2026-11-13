@@ -23,6 +23,7 @@ interface SecretsFile {
 export class SecretStore {
   private file: string
   private data: SecretsFile
+  private listeners = new Set<() => void>()
 
   constructor(
     dir: string,
@@ -30,6 +31,26 @@ export class SecretStore {
   ) {
     this.file = join(dir, 'secrets.json')
     this.data = { version: 1, entries: readJsonSync<SecretsFile>(this.file, { version: 1, entries: {} }).entries ?? {} }
+  }
+
+  onChange(cb: () => void): () => void {
+    this.listeners.add(cb)
+    return () => this.listeners.delete(cb)
+  }
+
+  private async persist(): Promise<void> {
+    await writeJson(this.file, this.data)
+    for (const l of this.listeners) l()
+  }
+
+  /** All saved secrets for one host (decrypted). */
+  async getAll(hostId: string): Promise<Partial<Record<SecretKind, string>>> {
+    const out: Partial<Record<SecretKind, string>> = {}
+    for (const k of ['password', 'key', 'passphrase'] as SecretKind[]) {
+      const v = await this.get(hostId, k)
+      if (v !== undefined) out[k] = v
+    }
+    return out
   }
 
   backend(): Promise<SecretBackendInfo> {
@@ -49,7 +70,7 @@ export class SecretStore {
     await this.assertAvailable()
     if (!value) return this.remove(hostId, kind)
     this.data.entries[`${hostId}:${kind}`] = (await this.cipher.encrypt(value)).toString('base64')
-    await writeJson(this.file, this.data)
+    await this.persist()
   }
 
   async get(hostId: string, kind: SecretKind): Promise<string | undefined> {
@@ -72,20 +93,20 @@ export class SecretStore {
 
   async remove(hostId: string, kind: SecretKind): Promise<void> {
     delete this.data.entries[`${hostId}:${kind}`]
-    await writeJson(this.file, this.data)
+    await this.persist()
   }
 
   async removeHost(hostId: string): Promise<void> {
     for (const k of Object.keys(this.data.entries)) {
       if (k.startsWith(`${hostId}:`)) delete this.data.entries[k]
     }
-    await writeJson(this.file, this.data)
+    await this.persist()
   }
 
   async copyHost(fromId: string, toId: string): Promise<void> {
     for (const [k, v] of Object.entries(this.data.entries)) {
       if (k.startsWith(`${fromId}:`)) this.data.entries[`${toId}:${k.slice(fromId.length + 1)}`] = v
     }
-    await writeJson(this.file, this.data)
+    await this.persist()
   }
 }

@@ -27,7 +27,8 @@ const noop = () => () => undefined
       },
       onCancel: noop
     },
-    sftp: { onTransfer: noop }
+    sftp: { onTransfer: noop },
+    fileSync: { status: async () => null, onStatus: noop }
   }
 }
 

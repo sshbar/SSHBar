@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Host, HostInput, HostStats, PromptRequest, SessionStatus, Settings, TransferInfo } from '../../shared/types'
+import type { FileSyncStatus, Host, HostInput, HostStats, PromptRequest, SessionStatus, Settings, TransferInfo } from '../../shared/types'
 import { api } from './api'
 import { disposeTerminal, pushTerminalData } from './terminalBus'
 import { errorText } from './format'
@@ -39,6 +39,7 @@ interface State {
   transfers: Record<string, TransferInfo>
   toasts: Toast[]
   editor: HostInput | null
+  fileSync: FileSyncStatus | null
 
   init(): Promise<void>
   setActive(id: Page | string): void
@@ -68,13 +69,14 @@ export const useStore = create<State>((set, get) => ({
   transfers: {},
   toasts: [],
   editor: null,
+  fileSync: null,
 
   init() {
     // React StrictMode runs effects twice in development: subscribe exactly once,
     // otherwise every terminal chunk and every prompt would be delivered twice.
     initOnce ??= (async () => {
-      const [hosts, settings] = await Promise.all([api.hosts.list(), api.settings.get()])
-      set({ hosts, settings, ready: true })
+      const [hosts, settings, fileSync] = await Promise.all([api.hosts.list(), api.settings.get(), api.fileSync.status()])
+      set({ hosts, settings, fileSync, ready: true })
       subscribe()
     })()
     return initOnce
@@ -83,6 +85,7 @@ export const useStore = create<State>((set, get) => ({
 
     api.hosts.onChanged((hosts) => set({ hosts }))
     api.settings.onChanged((settings) => set({ settings }))
+    api.fileSync.onStatus((fileSync) => set({ fileSync }))
 
     api.ssh.onEvent((ev) => {
       if (ev.type === 'data') return pushTerminalData(ev.sessionId, ev.data)

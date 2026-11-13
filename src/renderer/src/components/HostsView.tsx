@@ -30,6 +30,7 @@ export function HostsView() {
   const connect = useStore((s) => s.connect)
   const openEditor = useStore((s) => s.openEditor)
   const toast = useStore((s) => s.toast)
+  const fileSync = useStore((s) => s.fileSync)
   const [q, setQ] = useState('')
   const [deleting, setDeleting] = useState<Host | null>(null)
 
@@ -88,6 +89,23 @@ export function HostsView() {
         </button>
       </div>
 
+      {fileSync?.enabled && fileSync.locked && (
+        <div className="banner">
+          <Lock size={15} />
+          <span>Your sync file is locked on this device — enter the master password to get the latest hosts.</span>
+          <button className="btn sm primary" onClick={() => useStore.getState().setActive('settings')}>
+            Unlock
+          </button>
+        </div>
+      )}
+      {fileSync?.enabled && !fileSync.locked && fileSync.lastError && (
+        <div className="banner err">
+          <span>Sync file: {fileSync.lastError}</span>
+          <button className="btn sm" onClick={() => useStore.getState().setActive('settings')}>
+            Settings
+          </button>
+        </div>
+      )}
       {hosts.length === 0 ? (
         <div className="empty">
           <Server size={42} />

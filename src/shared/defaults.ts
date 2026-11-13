@@ -39,6 +39,14 @@ export const DEFAULT_SETTINGS: Settings = {
     itemId: '',
     lastSyncAt: 0,
     lastError: ''
+  },
+  fileSync: {
+    enabled: false,
+    path: '',
+    includeSecrets: true,
+    rememberPassword: true,
+    lastSyncAt: 0,
+    lastError: ''
   }
 }
 

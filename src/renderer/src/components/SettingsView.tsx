@@ -4,6 +4,7 @@ import type { KnownHostEntry, PPAgentStatus, PPStatus, PPVault, SecretBackendInf
 import { api } from '../api'
 import { useStore } from '../store'
 import { dateTime, errorText } from '../format'
+import { FileSyncSection } from './FileSyncSection'
 
 function Section({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
   return (
@@ -139,6 +140,13 @@ export function SettingsView() {
             </button>
           </div>
         </div>
+      </Section>
+
+      <Section
+        title="Encrypted sync file"
+        desc="The simplest way to share hosts between your computers without a server: one encrypted file in a folder you already sync. Each device works offline and merges changes when the file updates."
+      >
+        <FileSyncSection />
       </Section>
 
       <Section

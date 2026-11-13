@@ -76,7 +76,7 @@ function fingerprintOf(s: { hosts: Host[]; deleted: Record<string, number> }): s
   return JSON.stringify([hosts, del])
 }
 
-function countDiff(from: { hosts: Host[] }, to: { hosts: Host[] }): number {
+export function countDiff(from: { hosts: Host[] }, to: { hosts: Host[] }): number {
   const fromMap = new Map(from.hosts.map((h) => [h.id, h.updatedAt]))
   const toIds = new Set(to.hosts.map((h) => h.id))
   let n = 0

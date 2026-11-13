@@ -53,6 +53,18 @@ const api: SSHBuddyApi = {
     sync: () => invoke('pp:sync')
   },
 
+  fileSync: {
+    status: () => invoke('fileSync:status'),
+    choosePath: (mode) => invoke('fileSync:choosePath', mode),
+    enable: (opts) => invoke('fileSync:enable', opts),
+    unlock: (password, remember) => invoke('fileSync:unlock', password, remember),
+    disable: () => invoke('fileSync:disable'),
+    syncNow: () => invoke('fileSync:syncNow'),
+    changePassword: (pw) => invoke('fileSync:changePassword', pw),
+    setIncludeSecrets: (v) => invoke('fileSync:setIncludeSecrets', v),
+    onStatus: (cb) => on('fileSync:status', cb)
+  },
+
   ssh: {
     open: (hostId, cols, rows) => invoke('ssh:open', hostId, cols, rows),
     write: (id, data) => ipcRenderer.send('ssh:write', id, data),

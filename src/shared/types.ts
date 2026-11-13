@@ -53,6 +53,23 @@ export interface Settings {
   terminalCursorStyle: 'block' | 'bar' | 'underline'
   statsIntervalSec: number
   sync: SyncSettings
+  fileSync: FileSyncSettings
+}
+
+/** Encrypted sync file in a folder the user syncs themselves (Dropbox, Syncthing, NAS, …). */
+export interface FileSyncSettings {
+  enabled: boolean
+  path: string
+  includeSecrets: boolean
+  rememberPassword: boolean
+  lastSyncAt: number
+  lastError: string
+}
+
+export interface FileSyncStatus extends FileSyncSettings {
+  /** Enabled, but the master password is not known in this session */
+  locked: boolean
+  syncing: boolean
 }
 
 export interface SyncSettings {

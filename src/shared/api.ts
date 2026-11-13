@@ -1,5 +1,6 @@
 import type {
   DirListing,
+  FileSyncStatus,
   Host,
   HostInput,
   ImportResult,
@@ -62,6 +63,18 @@ export interface SSHBuddyApi {
     agentStart(vaultShareId?: string): Promise<PPAgentStatus>
     agentStop(): Promise<PPAgentStatus>
     sync(): Promise<SyncResult>
+  }
+
+  fileSync: {
+    status(): Promise<FileSyncStatus>
+    choosePath(mode: 'create' | 'open'): Promise<string | null>
+    enable(opts: { path: string; password: string; includeSecrets: boolean; rememberPassword: boolean; create: boolean }): Promise<SyncResult>
+    unlock(password: string, remember: boolean): Promise<SyncResult>
+    disable(): Promise<void>
+    syncNow(): Promise<SyncResult>
+    changePassword(newPassword: string): Promise<SyncResult>
+    setIncludeSecrets(include: boolean): Promise<SyncResult>
+    onStatus(cb: (s: FileSyncStatus) => void): Unsubscribe
   }
 
   ssh: {

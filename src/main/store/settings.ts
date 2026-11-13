@@ -11,6 +11,7 @@ function clampInt(v: unknown, min: number, max: number, fallback: number): numbe
 export function sanitizeSettings(raw: Partial<Settings>): Settings {
   const d = DEFAULT_SETTINGS
   const sync = { ...d.sync, ...(raw.sync ?? {}) }
+  const fs = { ...d.fileSync, ...(raw.fileSync ?? {}) }
   return {
     protonPassCli: typeof raw.protonPassCli === 'string' && raw.protonPassCli.trim() ? raw.protonPassCli.trim() : d.protonPassCli,
     protonPassAgentSocket: typeof raw.protonPassAgentSocket === 'string' ? raw.protonPassAgentSocket.trim() : d.protonPassAgentSocket,
@@ -29,6 +30,14 @@ export function sanitizeSettings(raw: Partial<Settings>): Settings {
       itemId: String(sync.itemId ?? ''),
       lastSyncAt: Number(sync.lastSyncAt) || 0,
       lastError: String(sync.lastError ?? '')
+    },
+    fileSync: {
+      enabled: Boolean(fs.enabled),
+      path: typeof fs.path === 'string' ? fs.path : '',
+      includeSecrets: fs.includeSecrets !== false,
+      rememberPassword: fs.rememberPassword !== false,
+      lastSyncAt: Number(fs.lastSyncAt) || 0,
+      lastError: String(fs.lastError ?? '')
     }
   }
 }
@@ -47,7 +56,12 @@ export class SettingsStore {
   }
 
   async update(patch: Partial<Settings>): Promise<Settings> {
-    this.data = sanitizeSettings({ ...this.data, ...patch, sync: { ...this.data.sync, ...(patch.sync ?? {}) } })
+    this.data = sanitizeSettings({
+      ...this.data,
+      ...patch,
+      sync: { ...this.data.sync, ...(patch.sync ?? {}) },
+      fileSync: { ...this.data.fileSync, ...(patch.fileSync ?? {}) }
+    })
     await writeJson(this.file, this.data)
     return this.get()
   }
