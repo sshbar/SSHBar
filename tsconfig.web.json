@@ -25,6 +25,7 @@
   "include": [
     "src/renderer/src/**/*",
     "src/shared/**/*",
-    "test/store.test.ts"
+    "test/store.test.ts",
+    "src/mobile/**/*"
   ]
 }

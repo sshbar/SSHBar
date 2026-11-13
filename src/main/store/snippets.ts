@@ -1,25 +1,14 @@
-import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import type { Snippet, SnippetInput } from '../../shared/types'
 import { readJsonSync, writeJson } from './jsonFile'
+import { sanitizeSnippet } from '../../shared/snippetModel'
+
+export { sanitizeSnippet }
 
 interface SnippetsFile {
   version: 1
   snippets: Snippet[]
   deleted: Record<string, number>
-}
-
-export function sanitizeSnippet(input: Partial<Snippet>, now = Date.now()): Snippet {
-  const command = typeof input.command === 'string' ? input.command.slice(0, 20_000) : ''
-  if (!command.trim()) throw new Error('A snippet needs a command')
-  const name = typeof input.name === 'string' ? input.name.trim().slice(0, 200) : ''
-  return {
-    id: typeof input.id === 'string' && input.id ? input.id.slice(0, 64) : randomUUID(),
-    name: name || command.trim().split('\n')[0].slice(0, 60),
-    command,
-    createdAt: typeof input.createdAt === 'number' ? input.createdAt : now,
-    updatedAt: typeof input.updatedAt === 'number' ? input.updatedAt : now
-  }
 }
 
 /** Saved commands, with deletion tombstones so removals propagate through sync. */

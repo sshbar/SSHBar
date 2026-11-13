@@ -1,0 +1,201 @@
+/* Phone layout for the Android app (body.mobile). Desktop styles stay untouched. */
+
+body.mobile {
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+body.mobile .app {
+  flex-direction: column;
+  height: 100%;
+  padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  padding-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  padding-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+}
+
+/* side rail -> bottom navigation */
+body.mobile .rail {
+  order: 2;
+  width: 100%;
+  height: auto;
+  flex-direction: row;
+  justify-content: space-around;
+  padding: 4px 0 calc(4px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  border-right: none;
+  border-top: 1px solid var(--line);
+}
+body.mobile .rail-logo,
+body.mobile .rail-spacer {
+  display: none;
+}
+body.mobile .rail-btn {
+  width: 76px;
+  padding: 6px 0;
+  font-size: 11px;
+}
+body.mobile .main {
+  order: 1;
+  flex: 1;
+  min-height: 0;
+}
+
+/* tabs */
+body.mobile .tabbar {
+  height: 44px;
+}
+body.mobile .tab {
+  max-width: 180px;
+  padding: 0 6px 0 12px;
+}
+body.mobile .tab-close {
+  width: 30px;
+  height: 30px;
+}
+
+/* pages */
+body.mobile .page {
+  padding: 14px 12px 24px;
+}
+body.mobile .page-head {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+body.mobile .page-head h1 {
+  font-size: 18px;
+}
+body.mobile .page-head .search {
+  order: 3;
+  flex: 1 0 100%;
+  min-width: 0;
+}
+body.mobile .btn {
+  min-height: 38px;
+}
+body.mobile .btn.sm {
+  min-height: 32px;
+}
+body.mobile .icon-btn {
+  width: 36px;
+  height: 36px;
+}
+body.mobile input,
+body.mobile select,
+body.mobile textarea {
+  font-size: 16px; /* avoids zoom-on-focus and is easier to tap */
+}
+
+/* host cards: one column, actions always visible (no hover on touch) */
+body.mobile .host-grid {
+  grid-template-columns: 1fr;
+}
+body.mobile .host-actions {
+  position: static;
+  opacity: 1;
+  pointer-events: auto;
+  background: none;
+  padding: 0;
+  flex-direction: column;
+}
+
+/* dialogs use the full width */
+body.mobile .modal-backdrop {
+  padding: 8px;
+  place-items: end center;
+}
+body.mobile .modal {
+  width: 100% !important;
+  max-height: calc(100% - 16px);
+  border-radius: 14px;
+}
+body.mobile .grid-2,
+body.mobile .grid-3 {
+  grid-template-columns: 1fr;
+}
+body.mobile .span-2,
+body.mobile .span-3 {
+  grid-column: auto;
+}
+body.mobile .segmented button {
+  padding: 8px 10px;
+}
+
+/* settings */
+body.mobile .settings-section {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+body.mobile .kh-row {
+  grid-template-columns: 1fr auto;
+}
+body.mobile .kh-row > :nth-child(3),
+body.mobile .kh-row > :nth-child(4) {
+  display: none;
+}
+
+/* session */
+body.mobile .session-toolbar {
+  gap: 6px;
+  padding: 4px 6px;
+}
+body.mobile .session-title {
+  display: none;
+}
+body.mobile .session-toolbar .segmented button {
+  padding: 6px 9px;
+}
+body.mobile .terminal-host {
+  padding: 4px 2px 2px 6px;
+}
+body.mobile .overlay-card {
+  margin: 0 12px;
+}
+
+/* extra keys row above the soft keyboard */
+.term-keys {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--bg-2);
+  border-top: 1px solid var(--line);
+  flex: none;
+}
+.term-keys button {
+  flex: none;
+  min-width: 42px;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line-2);
+  background: var(--bg-3);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.term-keys button.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.term-keys button:active {
+  background: var(--bg-4);
+}
+
+/* stats bar: scroll sideways instead of squeezing */
+body.mobile .statsbar {
+  overflow-x: auto;
+  scrollbar-width: none;
+  height: 30px;
+}
+body.mobile .sb-os,
+body.mobile .sb-label {
+  display: none;
+}
+
+body.mobile .toasts {
+  left: 12px;
+  right: 12px;
+  bottom: 84px;
+  max-width: none;
+}

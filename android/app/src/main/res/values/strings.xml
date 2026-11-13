@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SSHbar</string>
+    <string name="title_activity_main">SSHbar</string>
+    <string name="package_name">com.nicuorlov.sshbar</string>
+    <string name="custom_url_scheme">com.nicuorlov.sshbar</string>
+</resources>

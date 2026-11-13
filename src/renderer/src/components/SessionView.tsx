@@ -23,13 +23,17 @@ export function SessionView({ id, visible }: { id: string; visible: boolean }) {
           <button className={s.view === 'terminal' ? 'on' : ''} onClick={() => setView(id, 'terminal')}>
             <SquareTerminal size={14} /> Terminal
           </button>
-          <button className={s.view === 'files' ? 'on' : ''} onClick={() => setView(id, 'files')} disabled={!connected && !s.filesOpened}>
-            <FolderOpen size={14} /> Files
-          </button>
-          <button className={s.view === 'ports' ? 'on' : ''} onClick={() => setView(id, 'ports')}>
-            <ArrowRightLeft size={14} /> Ports
-            {s.forwards.some((f) => f.status === 'active') && <span className="count">{s.forwards.filter((f) => f.status === 'active').length}</span>}
-          </button>
+          {api.platform !== 'android' && (
+            <>
+              <button className={s.view === 'files' ? 'on' : ''} onClick={() => setView(id, 'files')} disabled={!connected && !s.filesOpened}>
+                <FolderOpen size={14} /> Files
+              </button>
+              <button className={s.view === 'ports' ? 'on' : ''} onClick={() => setView(id, 'ports')}>
+                <ArrowRightLeft size={14} /> Ports
+                {s.forwards.some((f) => f.status === 'active') && <span className="count">{s.forwards.filter((f) => f.status === 'active').length}</span>}
+              </button>
+            </>
+          )}
         </div>
         <div className="session-title">
           <b>{s.label}</b> <span className="muted">{s.subtitle}</span>

@@ -39,6 +39,7 @@ export function TerminalPane({ sessionId, visible }: { sessionId: string; visibl
   const settings = useStore((s) => s.settings)
   const status = useStore((s) => s.sessions[sessionId]?.status)
   const searchRef = useRef<SearchAddon | null>(null)
+  const sendRef = useRef<(d: string) => void>(() => undefined)
   const [search, setSearch] = useState<{ open: boolean; q: string; caseSensitive: boolean; found: boolean | null }>({
     open: false,
     q: '',
@@ -46,6 +47,10 @@ export function TerminalPane({ sessionId, visible }: { sessionId: string; visibl
     found: null
   })
   const searchInput = useRef<HTMLInputElement>(null)
+  // Android: sticky Ctrl/Alt from the extra-keys row apply to the next key typed on the soft keyboard
+  const isMobile = api.platform === 'android'
+  const mods = useRef({ ctrl: false, alt: false })
+  const [modState, setModState] = useState({ ctrl: false, alt: false })
 
   useEffect(() => {
     const el = ref.current
@@ -129,8 +134,23 @@ export function TerminalPane({ sessionId, visible }: { sessionId: string; visibl
     // Only forward keystrokes once the shell is open. Anything typed while connecting (e.g. a
     // password meant for a dialog) must never end up on the remote command line.
     const send = (d: string): void => {
-      if (useStore.getState().sessions[sessionId]?.status === 'connected') api.ssh.write(sessionId, d)
+      if (useStore.getState().sessions[sessionId]?.status !== 'connected') return
+      const m = mods.current
+      if ((m.ctrl || m.alt) && d.length === 1) {
+        let out = d
+        if (m.ctrl) {
+          const c = d.toUpperCase().charCodeAt(0)
+          if (c >= 64 && c <= 95) out = String.fromCharCode(c - 64) // Ctrl+A..Z, [ \\ ] ^ _
+          else if (d === ' ') out = '\x00'
+        }
+        if (m.alt) out = '\x1b' + out
+        mods.current = { ctrl: false, alt: false }
+        setModState({ ctrl: false, alt: false })
+        d = out
+      }
+      api.ssh.write(sessionId, d)
     }
+    sendRef.current = send
     const dataSub = term.onData(send)
     const binSub = term.onBinary(send)
     const resizeSub = term.onResize(({ cols, rows }) => api.ssh.resize(sessionId, cols, rows))
@@ -205,8 +225,20 @@ export function TerminalPane({ sessionId, visible }: { sessionId: string; visibl
   }
 
   return (
-    <div className="terminal-wrap">
+    <div className={`terminal-wrap ${isMobile ? 'with-keys' : ''}`}>
       <div className="terminal-host" ref={ref} />
+      {isMobile && (
+        <TermKeys
+          mods={modState}
+          onToggle={(k) => {
+            mods.current = { ...mods.current, [k]: !mods.current[k] }
+            setModState({ ...mods.current })
+          }}
+          onKey={(seq) => sendRef.current(seq)}
+          onPaste={() => void api.clipboard.read().then((t) => t && termRef.current?.paste(t))}
+          onFind={() => setSearch((s) => ({ ...s, open: !s.open }))}
+        />
+      )}
       {search.open && (
         <div className="term-search" onKeyDown={(e) => e.stopPropagation()}>
           <input
@@ -247,6 +279,57 @@ export function TerminalPane({ sessionId, visible }: { sessionId: string; visibl
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+const KEYS: { label: string; seq: string }[] = [
+  { label: 'Esc', seq: '\x1b' },
+  { label: 'Tab', seq: '\t' },
+  { label: '←', seq: '\x1b[D' },
+  { label: '↑', seq: '\x1b[A' },
+  { label: '↓', seq: '\x1b[B' },
+  { label: '→', seq: '\x1b[C' },
+  { label: '|', seq: '|' },
+  { label: '/', seq: '/' },
+  { label: '-', seq: '-' },
+  { label: '~', seq: '~' },
+  { label: 'Home', seq: '\x1b[H' },
+  { label: 'End', seq: '\x1b[F' },
+  { label: 'PgUp', seq: '\x1b[5~' },
+  { label: 'PgDn', seq: '\x1b[6~' }
+]
+
+/** Extra keys row for touch keyboards. Buttons don't take focus, so the soft keyboard stays open. */
+function TermKeys({
+  mods,
+  onToggle,
+  onKey,
+  onPaste,
+  onFind
+}: {
+  mods: { ctrl: boolean; alt: boolean }
+  onToggle: (k: 'ctrl' | 'alt') => void
+  onKey: (seq: string) => void
+  onPaste: () => void
+  onFind: () => void
+}) {
+  const keep = (e: React.PointerEvent | React.MouseEvent): void => e.preventDefault()
+  return (
+    <div className="term-keys" onPointerDown={keep} onMouseDown={keep}>
+      <button className={mods.ctrl ? 'on' : ''} onClick={() => onToggle('ctrl')}>
+        Ctrl
+      </button>
+      <button className={mods.alt ? 'on' : ''} onClick={() => onToggle('alt')}>
+        Alt
+      </button>
+      {KEYS.map((k) => (
+        <button key={k.label} onClick={() => onKey(k.seq)}>
+          {k.label}
+        </button>
+      ))}
+      <button onClick={onPaste}>Paste</button>
+      <button onClick={onFind}>Find</button>
     </div>
   )
 }

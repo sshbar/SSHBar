@@ -7,6 +7,7 @@ directories:
   output: dist
 files:
   - out/**
+  - "!out/mobile/**"
   - build/icon.png
   - package.json
   - "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme,test,__tests__,tests,example,examples}"

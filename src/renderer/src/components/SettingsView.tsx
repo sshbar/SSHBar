@@ -85,129 +85,155 @@ export function SettingsView() {
         <h1>Settings</h1>
       </div>
 
-      <Section title="Proton Pass" desc="SSHbar talks to the Proton Pass CLI to fetch passwords and SSH keys on demand. Nothing fetched is written to disk.">
-        <div className="row gap wrap">
-          <label className="field grow">
-            <span>CLI command or path</span>
-            <input className="mono" value={cliPath} onChange={(e) => setCliPath(e.target.value)} onBlur={() => cliPath !== s.protonPassCli && update({ protonPassCli: cliPath })} />
-          </label>
-          <button className="btn self-end" onClick={() => void update({ protonPassCli: cliPath }).then(checkPP)}>
-            <RefreshCw size={14} className={ppLoading ? 'spin' : ''} /> Check
-          </button>
-        </div>
-        <div className="status-line">
-          {ppLoading && !pp ? (
-            <>
-              <LoaderCircle className="spin" size={14} /> Checking…
-            </>
-          ) : pp?.loggedIn ? (
-            <>
-              <CircleCheck size={15} className="ok-text" /> {pp.version} — signed in{pp.username ? ` as ${pp.username}` : ''}
-            </>
-          ) : pp?.installed ? (
-            <>
-              <CircleX size={15} className="warn-text" /> {pp.version} — not signed in. Run <code>pass-cli login</code> in a terminal, then press Check.
-            </>
-          ) : (
-            <>
-              <CircleX size={15} className="err-text" /> Proton Pass CLI not found. Install <code>pass-cli</code> (see{' '}
-              <a href="#" onClick={() => void api.openExternal('https://proton.me/pass')}>
-                proton.me/pass
-              </a>
-              ) or set its full path above.
-            </>
-          )}
-        </div>
+      {api.platform !== 'android' && (
+        <>
+          <Section
+            title="Proton Pass"
+            desc="SSHbar talks to the Proton Pass CLI to fetch passwords and SSH keys on demand. Nothing fetched is written to disk."
+          >
+            <div className="row gap wrap">
+              <label className="field grow">
+                <span>CLI command or path</span>
+                <input
+                  className="mono"
+                  value={cliPath}
+                  onChange={(e) => setCliPath(e.target.value)}
+                  onBlur={() => cliPath !== s.protonPassCli && update({ protonPassCli: cliPath })}
+                />
+              </label>
+              <button className="btn self-end" onClick={() => void update({ protonPassCli: cliPath }).then(checkPP)}>
+                <RefreshCw size={14} className={ppLoading ? 'spin' : ''} /> Check
+              </button>
+            </div>
+            <div className="status-line">
+              {ppLoading && !pp ? (
+                <>
+                  <LoaderCircle className="spin" size={14} /> Checking…
+                </>
+              ) : pp?.loggedIn ? (
+                <>
+                  <CircleCheck size={15} className="ok-text" /> {pp.version} — signed in{pp.username ? ` as ${pp.username}` : ''}
+                </>
+              ) : pp?.installed ? (
+                <>
+                  <CircleX size={15} className="warn-text" /> {pp.version} — not signed in. Run <code>pass-cli login</code> in a terminal, then press
+                  Check.
+                </>
+              ) : (
+                <>
+                  <CircleX size={15} className="err-text" /> Proton Pass CLI not found. Install <code>pass-cli</code> (see{' '}
+                  <a href="#" onClick={() => void api.openExternal('https://proton.me/pass')}>
+                    proton.me/pass
+                  </a>
+                  ) or set its full path above.
+                </>
+              )}
+            </div>
 
-        <h3>SSH agent</h3>
-        <p className="muted small">
-          Hosts using “Proton Pass agent” authenticate with SSH keys stored in your vaults via <code>pass-cli ssh-agent</code>.
-        </p>
-        <div className="row gap wrap">
-          <label className="field grow">
-            <span>Agent socket</span>
-            <input
-              className="mono"
-              placeholder={api.platform === 'win32' ? '\\\\.\\pipe\\proton-pass-agent' : '~/.ssh/proton-pass-agent.sock'}
-              defaultValue={s.protonPassAgentSocket}
-              onBlur={(e) => e.target.value !== s.protonPassAgentSocket && update({ protonPassAgentSocket: e.target.value })}
-            />
-          </label>
-          <div className="row gap self-end">
-            <span className={`pill ${agent?.running ? 'ok' : ''}`}>{agent ? (agent.running ? 'Running' : 'Stopped') : '—'}</span>
-            <button className="btn" disabled={agentBusy || !pp?.loggedIn || agent?.running} onClick={() => void agentAction(() => api.protonPass.agentStart())}>
-              <Play size={14} /> Start
-            </button>
-            <button className="btn" disabled={agentBusy || !agent?.running} onClick={() => void agentAction(() => api.protonPass.agentStop())}>
-              <Square size={14} /> Stop
-            </button>
-          </div>
-        </div>
-      </Section>
+            <h3>SSH agent</h3>
+            <p className="muted small">
+              Hosts using “Proton Pass agent” authenticate with SSH keys stored in your vaults via <code>pass-cli ssh-agent</code>.
+            </p>
+            <div className="row gap wrap">
+              <label className="field grow">
+                <span>Agent socket</span>
+                <input
+                  className="mono"
+                  placeholder={api.platform === 'win32' ? '\\\\.\\pipe\\proton-pass-agent' : '~/.ssh/proton-pass-agent.sock'}
+                  defaultValue={s.protonPassAgentSocket}
+                  onBlur={(e) => e.target.value !== s.protonPassAgentSocket && update({ protonPassAgentSocket: e.target.value })}
+                />
+              </label>
+              <div className="row gap self-end">
+                <span className={`pill ${agent?.running ? 'ok' : ''}`}>{agent ? (agent.running ? 'Running' : 'Stopped') : '—'}</span>
+                <button
+                  className="btn"
+                  disabled={agentBusy || !pp?.loggedIn || agent?.running}
+                  onClick={() => void agentAction(() => api.protonPass.agentStart())}
+                >
+                  <Play size={14} /> Start
+                </button>
+                <button className="btn" disabled={agentBusy || !agent?.running} onClick={() => void agentAction(() => api.protonPass.agentStop())}>
+                  <Square size={14} /> Stop
+                </button>
+              </div>
+            </div>
+          </Section>
 
-      <Section
-        title="Encrypted sync file"
-        desc="The simplest way to share hosts between your computers without a server: one encrypted file in a folder you already sync. Each device works offline and merges changes when the file updates."
-      >
-        <FileSyncSection />
-      </Section>
+          <Section
+            title="Encrypted sync file"
+            desc="The simplest way to share hosts between your computers without a server: one encrypted file in a folder you already sync. Each device works offline and merges changes when the file updates."
+          >
+            <FileSyncSection />
+          </Section>
 
-      <Section
-        title="Sync hosts through Proton Pass"
-        desc="Keeps your host list in an end-to-end encrypted Proton Pass note (“SSHbar Sync”) so every device sees the same connections. Only host details and references are synced — never passwords or keys saved on this device."
-      >
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={s.sync.enabled}
-            disabled={!s.sync.shareId}
-            onChange={(e) => void update({ sync: { ...s.sync, enabled: e.target.checked } })}
-          />
-          Sync automatically (on start and after changes)
-        </label>
-        <div className="row gap wrap">
-          <label className="field grow">
-            <span>Vault</span>
-            <select
-              value={s.sync.shareId}
-              disabled={!vaults}
-              onChange={(e) => {
-                const v = vaults?.find((x) => x.shareId === e.target.value)
-                void update({ sync: { ...s.sync, shareId: e.target.value, vaultName: v?.name ?? '', itemId: '' } })
-              }}
-            >
-              <option value="">{vaults ? 'Choose a vault…' : pp?.loggedIn ? 'Loading…' : 'Sign in to Proton Pass first'}</option>
-              {vaults?.map((v) => (
-                <option key={v.shareId} value={v.shareId}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button className="btn self-end" disabled={!s.sync.shareId || syncBusy} onClick={() => void syncNow()}>
-            <RefreshCw size={14} className={syncBusy ? 'spin' : ''} /> Sync now
-          </button>
-        </div>
-        <div className="status-line small">
-          {s.sync.lastError ? (
-            <span className="err-text">Last sync failed: {s.sync.lastError}</span>
-          ) : s.sync.lastSyncAt ? (
-            <span className="muted">Last synced {new Date(s.sync.lastSyncAt).toLocaleString()}</span>
-          ) : (
-            <span className="muted">Not synced yet</span>
-          )}
-        </div>
-      </Section>
+          <Section
+            title="Sync hosts through Proton Pass"
+            desc="Keeps your host list in an end-to-end encrypted Proton Pass note (“SSHbar Sync”) so every device sees the same connections. Only host details and references are synced — never passwords or keys saved on this device."
+          >
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={s.sync.enabled}
+                disabled={!s.sync.shareId}
+                onChange={(e) => void update({ sync: { ...s.sync, enabled: e.target.checked } })}
+              />
+              Sync automatically (on start and after changes)
+            </label>
+            <div className="row gap wrap">
+              <label className="field grow">
+                <span>Vault</span>
+                <select
+                  value={s.sync.shareId}
+                  disabled={!vaults}
+                  onChange={(e) => {
+                    const v = vaults?.find((x) => x.shareId === e.target.value)
+                    void update({ sync: { ...s.sync, shareId: e.target.value, vaultName: v?.name ?? '', itemId: '' } })
+                  }}
+                >
+                  <option value="">{vaults ? 'Choose a vault…' : pp?.loggedIn ? 'Loading…' : 'Sign in to Proton Pass first'}</option>
+                  {vaults?.map((v) => (
+                    <option key={v.shareId} value={v.shareId}>
+                      {v.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="btn self-end" disabled={!s.sync.shareId || syncBusy} onClick={() => void syncNow()}>
+                <RefreshCw size={14} className={syncBusy ? 'spin' : ''} /> Sync now
+              </button>
+            </div>
+            <div className="status-line small">
+              {s.sync.lastError ? (
+                <span className="err-text">Last sync failed: {s.sync.lastError}</span>
+              ) : s.sync.lastSyncAt ? (
+                <span className="muted">Last synced {new Date(s.sync.lastSyncAt).toLocaleString()}</span>
+              ) : (
+                <span className="muted">Not synced yet</span>
+              )}
+            </div>
+          </Section>
+        </>
+      )}
 
       <Section title="Terminal">
         <div className="grid-3">
           <label className="field">
             <span>Font size</span>
-            <input type="number" min={8} max={32} value={s.terminalFontSize} onChange={(e) => void update({ terminalFontSize: Number(e.target.value) })} />
+            <input
+              type="number"
+              min={8}
+              max={32}
+              value={s.terminalFontSize}
+              onChange={(e) => void update({ terminalFontSize: Number(e.target.value) })}
+            />
           </label>
           <label className="field">
             <span>Cursor</span>
-            <select value={s.terminalCursorStyle} onChange={(e) => void update({ terminalCursorStyle: e.target.value as Settings['terminalCursorStyle'] })}>
+            <select
+              value={s.terminalCursorStyle}
+              onChange={(e) => void update({ terminalCursorStyle: e.target.value as Settings['terminalCursorStyle'] })}
+            >
               <option value="block">Block</option>
               <option value="bar">Bar</option>
               <option value="underline">Underline</option>
@@ -230,15 +256,26 @@ export function SettingsView() {
           </label>
         </div>
         <p className="muted small">
-          Copy / paste: {api.platform === 'darwin' ? '⌘C / ⌘V' : 'Ctrl+Shift+C / Ctrl+Shift+V'}, or right-click (copies a selection, otherwise pastes).
+          {api.platform === 'android'
+            ? 'Use the key row under the terminal for Ctrl, Alt, Esc, Tab, arrows and Paste.'
+            : `Copy / paste: ${api.platform === 'darwin' ? '⌘C / ⌘V' : 'Ctrl+Shift+C / Ctrl+Shift+V'}, or right-click (copies a selection, otherwise pastes).`}
           Ctrl/⌘-click opens links.
         </p>
       </Section>
 
-      <Section title="Monitoring" desc="The status bar polls CPU, memory, network and disk usage over the existing SSH connection — nothing is installed on the server.">
+      <Section
+        title="Monitoring"
+        desc="The status bar polls CPU, memory, network and disk usage over the existing SSH connection — nothing is installed on the server."
+      >
         <label className="field narrow">
           <span>Refresh every (seconds)</span>
-          <input type="number" min={1} max={60} value={s.statsIntervalSec} onChange={(e) => void update({ statsIntervalSec: Number(e.target.value) })} />
+          <input
+            type="number"
+            min={1}
+            max={60}
+            value={s.statsIntervalSec}
+            onChange={(e) => void update({ statsIntervalSec: Number(e.target.value) })}
+          />
         </label>
         <p className="muted small">Applies to new connections.</p>
       </Section>
@@ -251,7 +288,8 @@ export function SettingsView() {
             </>
           ) : (
             <>
-              <CircleX size={15} className="warn-text" /> Saving secrets on this device is disabled: {backend?.reason}. Use Proton Pass or “Ask every time”.
+              <CircleX size={15} className="warn-text" /> Saving secrets on this device is disabled: {backend?.reason}. Use Proton Pass or “Ask every
+              time”.
             </>
           )}
         </div>
@@ -280,24 +318,26 @@ export function SettingsView() {
         )}
       </Section>
 
-      <Section title="Backup" desc="Export or import your host list as JSON. Exports never include passwords or keys.">
-        <div className="row gap">
-          <button className="btn" onClick={() => api.hosts.exportJson().then((ok) => ok && toast('success', 'Hosts exported'))}>
-            <Download size={14} /> Export hosts
-          </button>
-          <button
-            className="btn"
-            onClick={() =>
-              api.hosts
-                .importJson()
-                .then((r) => (r.added || r.skipped) && toast('success', `Imported ${r.added}, skipped ${r.skipped}`))
-                .catch((e) => toast('error', errorText(e)))
-            }
-          >
-            <Upload size={14} /> Import hosts
-          </button>
-        </div>
-      </Section>
+      {api.platform !== 'android' && (
+        <Section title="Backup" desc="Export or import your host list as JSON. Exports never include passwords or keys.">
+          <div className="row gap">
+            <button className="btn" onClick={() => api.hosts.exportJson().then((ok) => ok && toast('success', 'Hosts exported'))}>
+              <Download size={14} /> Export hosts
+            </button>
+            <button
+              className="btn"
+              onClick={() =>
+                api.hosts
+                  .importJson()
+                  .then((r) => (r.added || r.skipped) && toast('success', `Imported ${r.added}, skipped ${r.skipped}`))
+                  .catch((e) => toast('error', errorText(e)))
+              }
+            >
+              <Upload size={14} /> Import hosts
+            </button>
+          </div>
+        </Section>
+      )}
 
       <Section title="About">
         <div className="about">

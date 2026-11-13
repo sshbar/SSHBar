@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import { FolderOpen, KeyRound, Lock, Plug, Plus, Trash } from 'lucide-react'
-import type { CredentialRef, HostInput, KeyRef, SecretBackendInfo, SecretKind } from '../../../shared/types'
+import type { AuthMethod, CredentialRef, HostInput, KeyRef, SecretBackendInfo, SecretKind } from '../../../shared/types'
 import { api } from '../api'
 import { useStore } from '../store'
 import { errorText } from '../format'
@@ -81,6 +81,12 @@ export function HostEditor({ initial }: { initial: HostInput }) {
   const setAuth = <K extends keyof HostInput['auth']>(k: K, v: HostInput['auth'][K]): void =>
     setH((p) => ({ ...p, auth: { ...p.auth, [k]: v } }))
 
+  // On the phone, Proton Pass / key files / agents don't exist: only show those choices for hosts that
+  // already use them (synced from a computer) so their shared settings stay intact.
+  const mobile = api.platform === 'android'
+  const keepIf = <T extends { value: string }>(opts: T[], current: string, desktopOnly: string[]): T[] =>
+    mobile ? opts.filter((o) => !desktopOnly.includes(o.value) || o.value === current).map((o) => (desktopOnly.includes(o.value) ? { ...o, disabled: true } : o)) : opts
+
   const credSource = (ref: CredentialRef, kind: SecretKind, onChange: (r: CredentialRef) => void, promptLabel: string) => (
     <Segmented<CredSource>
       value={ref.source}
@@ -88,11 +94,15 @@ export function HostEditor({ initial }: { initial: HostInput }) {
         if (v === 'protonpass') onChange({ source: 'protonpass', shareId: '', itemId: '' })
         else onChange({ source: v })
       }}
-      options={[
-        { value: 'prompt', label: promptLabel },
-        { value: 'local', label: has[kind] ? 'Saved on device ✓' : 'Save on this device', disabled: !localOk, title: localTitle },
-        { value: 'protonpass', label: 'Proton Pass' }
-      ]}
+      options={keepIf(
+        [
+          { value: 'prompt' as CredSource, label: promptLabel },
+          { value: 'local' as CredSource, label: has[kind] ? 'Saved on device ✓' : 'Save on this device', disabled: !localOk, title: localTitle },
+          { value: 'protonpass' as CredSource, label: mobile ? 'Proton Pass (computer only)' : 'Proton Pass' }
+        ],
+        ref.source,
+        ['protonpass']
+      )}
     />
   )
 
@@ -103,7 +113,7 @@ export function HostEditor({ initial }: { initial: HostInput }) {
       if (a.password.source === 'local' && !password && !has.password) return 'Enter the password to save on this device'
       if (a.password.source === 'protonpass' && !a.password.itemId) return 'Choose a Proton Pass login item'
     }
-    if (a.method === 'key') {
+    if (a.method === 'key' && !mobile) {
       if (a.key.source === 'file' && !a.key.path.trim()) return 'Choose a private key file'
       if (a.key.source === 'local' && !keyText.trim() && !has.key) return 'Paste the private key to save on this device'
       if (a.key.source === 'protonpass' && !a.key.itemId) return 'Choose a Proton Pass SSH key item'
@@ -131,6 +141,8 @@ export function HostEditor({ initial }: { initial: HostInput }) {
         passphrase: a.method === 'key' && a.passphrase.source === 'local'
       }
       if (want.password && password) await api.secrets.set(saved.id, 'password', password)
+      // on the phone a pasted key is stored on the device and used whatever the host's shared key source is
+      if (mobile && a.method === 'key') want.key = want.key || !!keyText.trim() || has.key
       if (want.key && keyText.trim()) await api.secrets.set(saved.id, 'key', keyText.trim() + '\n')
       if (want.passphrase && passphrase) await api.secrets.set(saved.id, 'passphrase', passphrase)
       // drop secrets that are no longer used, so nothing lingers on disk
@@ -219,14 +231,17 @@ export function HostEditor({ initial }: { initial: HostInput }) {
 
         <div className="field">
           <span>Authentication</span>
-          <Segmented
+          <Segmented<AuthMethod>
             value={a.method}
-            onChange={(v) => setAuth('method', v)}
+            onChange={(v) => {
+              setAuth('method', v)
+              if (mobile && v === 'key' && a.key.source === 'file' && !a.key.path) setAuth('key', { source: 'local' })
+            }}
             options={[
-              { value: 'password', label: 'Password', icon: <Lock size={14} /> },
-              { value: 'key', label: 'SSH key', icon: <KeyRound size={14} /> },
-              { value: 'agent', label: 'SSH agent', icon: <Plug size={14} /> }
-            ]}
+              { value: 'password' as AuthMethod, label: 'Password', icon: <Lock size={14} /> },
+              { value: 'key' as AuthMethod, label: 'SSH key', icon: <KeyRound size={14} /> },
+              { value: 'agent' as AuthMethod, label: 'SSH agent', icon: <Plug size={14} /> }
+            ].filter((o) => !mobile || o.value !== 'agent' || a.method === 'agent')}
           />
         </div>
 
@@ -267,14 +282,35 @@ export function HostEditor({ initial }: { initial: HostInput }) {
                   else if (v === 'local') setAuth('key', { source: 'local' })
                   else setAuth('key', { source: 'protonpass', shareId: '', itemId: '' })
                 }}
-                options={[
-                  { value: 'file', label: 'Key file' },
-                  { value: 'local', label: has.key ? 'Saved on device ✓' : 'Paste & save', disabled: !localOk, title: localTitle },
-                  { value: 'protonpass', label: 'Proton Pass' }
-                ]}
+                options={keepIf(
+                  [
+                    { value: 'file' as KeySource, label: mobile ? 'Key file (computer only)' : 'Key file' },
+                    { value: 'local' as KeySource, label: has.key ? 'Saved on device ✓' : 'Paste & save', disabled: !localOk, title: localTitle },
+                    { value: 'protonpass' as KeySource, label: mobile ? 'Proton Pass (computer only)' : 'Proton Pass' }
+                  ],
+                  a.key.source,
+                  ['file', 'protonpass']
+                )}
               />
             </div>
-            {a.key.source === 'file' && (
+            {mobile && a.key.source !== 'local' && (
+              <>
+                <p className="muted small">
+                  On your computer this host uses{' '}
+                  {a.key.source === 'file' ? <code>{a.key.path || 'a key file'}</code> : <>the Proton Pass key “{a.key.title || 'SSH key'}”</>}. Paste a
+                  private key to use on this phone: it is stored encrypted here only, and the computer keeps its own setting.
+                </p>
+                <textarea
+                  className="mono"
+                  rows={5}
+                  value={keyText}
+                  onChange={(e) => setKeyText(e.target.value)}
+                  placeholder={has.key ? 'A key is saved on this phone — paste a new one to replace it' : '-----BEGIN OPENSSH PRIVATE KEY-----'}
+                  spellCheck={false}
+                />
+              </>
+            )}
+            {!mobile && a.key.source === 'file' && (
               <div className="row gap">
                 <input
                   className="grow mono"
@@ -304,7 +340,7 @@ export function HostEditor({ initial }: { initial: HostInput }) {
                 spellCheck={false}
               />
             )}
-            {a.key.source === 'protonpass' && (
+            {!mobile && a.key.source === 'protonpass' && (
               <>
                 <ProtonPassPicker
                   type="ssh-key"

@@ -33,6 +33,7 @@ export function HostsView() {
   const fileSync = useStore((s) => s.fileSync)
   const [q, setQ] = useState('')
   const [deleting, setDeleting] = useState<Host | null>(null)
+  const mobile = api.platform === 'android'
 
   const groups = useMemo(() => {
     const needle = q.trim().toLowerCase()
@@ -78,12 +79,16 @@ export function HostsView() {
           <input placeholder="Search hosts, groups, tags…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <div className="grow" />
-        <button className="btn" onClick={importSsh} title="Import hosts from ~/.ssh/config">
-          <Import size={15} /> SSH config
-        </button>
-        <button className="btn" onClick={importJson} title="Import hosts from an SSHbar JSON export">
-          <Upload size={15} /> Import
-        </button>
+        {!mobile && (
+          <>
+            <button className="btn" onClick={importSsh} title="Import hosts from ~/.ssh/config">
+              <Import size={15} /> SSH config
+            </button>
+            <button className="btn" onClick={importJson} title="Import hosts from an SSHbar JSON export">
+              <Upload size={15} /> Import
+            </button>
+          </>
+        )}
         <button className="btn primary" onClick={() => openEditor(emptyHost())}>
           <Plus size={15} /> New host
         </button>
@@ -115,9 +120,11 @@ export function HostsView() {
             <button className="btn primary" onClick={() => openEditor(emptyHost())}>
               <Plus size={15} /> Add a host
             </button>
-            <button className="btn" onClick={importSsh}>
-              <Import size={15} /> Import ~/.ssh/config
-            </button>
+            {!mobile && (
+              <button className="btn" onClick={importSsh}>
+                <Import size={15} /> Import ~/.ssh/config
+              </button>
+            )}
           </div>
         </div>
       ) : (
@@ -135,6 +142,7 @@ export function HostsView() {
                       key={h.id}
                       className="host-card"
                       onDoubleClick={() => void connect(h.id)}
+                      onClick={() => mobile && void connect(h.id)}
                       onKeyDown={(e) => e.key === 'Enter' && void connect(h.id)}
                       tabIndex={0}
                     >
@@ -173,7 +181,7 @@ export function HostsView() {
                           ))}
                         </div>
                       </div>
-                      <div className="host-actions">
+                      <div className="host-actions" onClick={(e) => e.stopPropagation()}>
                         <button className="btn primary sm" onClick={() => void connect(h.id)}>
                           Connect
                         </button>
