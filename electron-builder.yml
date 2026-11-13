@@ -1,6 +1,7 @@
 appId: app.sshbuddy.client
 productName: SSHBuddy
 copyright: Copyright © 2026 SSHBuddy
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 directories:
   buildResources: build
   output: dist
@@ -10,23 +11,55 @@ files:
   - package.json
   - "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme,test,__tests__,tests,example,examples}"
   - "!**/*.{map,ts,tsx}"
-# ssh2 ships optional native crypto bindings and falls back to pure JS; skip rebuilding them for Electron
+  # ssh2's optional native helpers are compiled for Node, not Electron, so they never load in the app
+  # (ssh2 falls back to pure JS). Leaving them out keeps the Linux/Windows packages identical and clean.
+  - "!**/node_modules/ssh2/lib/protocol/crypto/build/**"
+  - "!**/node_modules/cpu-features/**"
 npmRebuild: false
 asarUnpack:
   - "**/*.node"
+
+# Windows on Linux: the portable .exe builds natively; the NSIS installer needs Wine to generate its
+# uninstaller, so build it with scripts/build-win.sh (electron-builder's official Docker image with Wine).
+
 linux:
-  target: [AppImage, deb]
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
   category: Network
   icon: build/icon.png
   synopsis: SSH client with SFTP, live stats and Proton Pass integration
+  description: Cross-platform SSH client with a file manager, port forwarding, jump hosts, live server stats and Proton Pass integration.
+  maintainer: SSHBuddy <sshbuddy@users.noreply.local>
+  executableName: sshbuddy
+  syncDesktopName: true
+appImage:
+  artifactName: ${productName}-${version}-x86_64.AppImage
 deb:
-  depends: [libsecret-1-0]
+  artifactName: ${name}_${version}_amd64.${ext}
+  depends: [libsecret-1-0, libnss3, libgtk-3-0, libxss1, libasound2t64 | libasound2]
+
 win:
-  target: [nsis]
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
   icon: build/icon.png
+  executableName: SSHBuddy
 nsis:
   oneClick: false
+  perMachine: false
   allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: SSHBuddy
+  artifactName: ${productName}-Setup-${version}-x64.${ext}
+portable:
+  artifactName: ${productName}-${version}-portable-x64.${ext}
+
 mac:
   target: [dmg]
   category: public.app-category.developer-tools

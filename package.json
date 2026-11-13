@@ -3,6 +3,7 @@
   "productName": "SSHBuddy",
   "version": "0.1.0",
   "description": "Cross-platform SSH client with SFTP, live host stats and Proton Pass integration",
+  "homepage": "https://sshbuddy.invalid",
   "main": "./out/main/index.js",
   "author": "SSHBuddy",
   "license": "MIT",
@@ -20,7 +21,10 @@
     "test:it": "scripts/it-server.sh >/dev/null && SSHBUDDY_IT_JUMP=1 SSHBUDDY_IT_KEYDIR=${SSHBUDDY_IT_KEYDIR:-$PWD/test/.data} vitest run test/ssh.integration.test.ts",
     "test:smoke": "electron-vite build && SMOKE_JUMP=1 SMOKE_KEY=${SSHBUDDY_IT_KEYDIR:-$PWD/test/.data}/id_plain electron --ozone-platform=headless scripts/smoke.cjs",
     "icon": "electron --ozone-platform=headless scripts/make-icon.cjs",
-    "dist:dir": "electron-vite build && electron-builder --dir"
+    "dist:dir": "electron-vite build && electron-builder --dir",
+    "dist:all": "npm run dist:linux && npm run dist:win:docker",
+    "dist:win:portable": "electron-vite build && electron-builder --win portable",
+    "dist:win:docker": "scripts/build-win.sh"
   },
   "dependencies": {
     "ssh2": "^1.17.0"
@@ -45,5 +49,6 @@
     "vite": "^8.3.8",
     "vitest": "^5.1.0",
     "zustand": "^5.1.0"
-  }
+  },
+  "desktopName": "sshbuddy.desktop"
 }

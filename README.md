@@ -91,12 +91,16 @@ Set `SSHBUDDY_DATA_DIR` to use a different directory, for example for a portable
 
 ## Packaging
 
-```bash
-npm run dist:linux   # AppImage + deb
-npm run dist:win     # NSIS installer (build on Windows)
-npm run dist:mac     # DMG (build on macOS; sign/notarize for distribution)
-npm run dist:dir     # unpacked app for the current OS, quickest check
-```
+| Command | Output (in `dist/`) |
+|---|---|
+| `npm run dist:linux` | `SSHBuddy-<version>-x86_64.AppImage`: a single executable (`chmod +x`, then run). `sshbuddy_<version>_amd64.deb`: installs to `/opt/SSHBuddy` with a `sshbuddy` command, a menu entry and the AppArmor profile Ubuntu 24.04+ needs. |
+| `npm run dist:win:docker` | `SSHBuddy-Setup-<version>-x64.exe` (installer with Start-menu and desktop shortcuts and an uninstaller) and `SSHBuddy-<version>-portable-x64.exe` (no install). Built on Linux inside electron-builder's official Docker image, which brings its own Wine. |
+| `npm run dist:win:portable` | Only the portable `.exe`. Needs no Wine or Docker. |
+| `npm run dist:win` | Both Windows files, when run on Windows (or Linux with Wine installed). |
+| `npm run dist:mac` | DMG. Build on macOS; sign and notarize for distribution. |
+| `npm run dist:all` | Linux and Windows packages in one go. |
+
+The Windows executables aren't code-signed, so SmartScreen shows *"Windows protected your PC"* on first run (*More info → Run anyway*). Set `CSC_LINK`/`CSC_KEY_PASSWORD` (or Azure Trusted Signing) to sign them.
 
 ## Tests
 
@@ -135,6 +139,6 @@ The renderer runs sandboxed with `contextIsolation` and has no Node access. Save
 
 - `ProxyCommand` isn't supported; imported hosts that use it get a note. The SOCKS proxy supports SOCKS5 CONNECT only (no SOCKS4, no UDP).
 - Live CPU/RAM/network stats need a Linux server. macOS/BSD hosts show disk usage only.
-- Only tested on Linux so far. Windows and macOS builds are configured but unverified.
+- Only run-tested on Linux. The Windows installer and portable `.exe` are built and contain the app's icon and version info, but they haven't been run on Windows yet. macOS builds are configured but unverified.
 - Proton Pass sync was tested against a simulated CLI. Its write commands (`item create note`, `item update --field`) come from `pass-cli --help` but haven't been run against a real vault yet.
 - No split panes, broadcast-to-many-sessions or mobile apps yet.
