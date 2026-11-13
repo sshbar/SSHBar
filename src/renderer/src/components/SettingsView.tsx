@@ -314,6 +314,10 @@ export function SettingsView() {
               ·{' '}
               <a href="#" onClick={(e) => (e.preventDefault(), void api.openExternal('mailto:contact@nicuorlov.com'))}>
                 contact@nicuorlov.com
+              </a>{' '}
+              ·{' '}
+              <a href="#" onClick={(e) => (e.preventDefault(), void api.openExternal('https://github.com/sshbar/SSHBar/releases'))}>
+                Releases &amp; updates
               </a>
             </div>
           </div>

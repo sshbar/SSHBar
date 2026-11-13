@@ -4,6 +4,10 @@
   "version": "0.1.0",
   "description": "Cross-platform SSH client with a file manager, port forwarding, jump hosts, live server stats and Proton Pass integration",
   "homepage": "https://nicuorlov.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sshbar/SSHBar.git"
+  },
   "author": {
     "name": "Nicolae Orlov",
     "email": "contact@nicuorlov.com",
