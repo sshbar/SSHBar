@@ -97,15 +97,27 @@ body.mobile .host-actions {
   flex-direction: column;
 }
 
-/* dialogs use the full width */
+/* dialogs: full-width bottom sheets. The height limit must use viewport units: a percentage of the
+   grid backdrop is unresolvable, so the dialog would grow past the screen and its buttons be unreachable. */
 body.mobile .modal-backdrop {
-  padding: 8px;
+  --sheet-top: calc(8px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+  --sheet-bottom: calc(8px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  padding: var(--sheet-top) 8px var(--sheet-bottom);
   place-items: end center;
+  overflow-y: auto; /* last resort: the whole sheet scrolls */
 }
 body.mobile .modal {
   width: 100% !important;
-  max-height: calc(100% - 16px);
+  max-height: calc(100vh - var(--sheet-top) - var(--sheet-bottom));
+  max-height: calc(100dvh - var(--sheet-top) - var(--sheet-bottom));
   border-radius: 14px;
+}
+body.mobile .modal-body {
+  overscroll-behavior: contain;
+}
+body.mobile .modal-foot {
+  flex: none;
+  flex-wrap: wrap;
 }
 body.mobile .grid-2,
 body.mobile .grid-3 {
