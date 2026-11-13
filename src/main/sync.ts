@@ -12,8 +12,8 @@ import type { ProtonPass } from './protonpass'
  * Proton Pass note item, in a custom field. Every device merges by last-writer-wins per host.
  */
 
-export const SYNC_NOTE_TITLE = 'SSHBuddy Sync'
-export const SYNC_FIELD = 'sshbuddy_hosts'
+export const SYNC_NOTE_TITLE = 'SSHbar Sync'
+export const SYNC_FIELD = 'sshbar_hosts'
 const TOMBSTONE_TTL_MS = 180 * 24 * 3600 * 1000
 
 export interface SyncPayload {
@@ -149,7 +149,7 @@ export async function syncHosts(pp: ProtonPass, hosts: HostStore, settings: Sett
       itemId = await pp.createNote(
         s.shareId,
         SYNC_NOTE_TITLE,
-        'Managed by SSHBuddy. Contains your SSH host list (no passwords or keys). Do not edit by hand.'
+        'Managed by SSHbar. Contains your SSH host list (no passwords or keys). Do not edit by hand.'
       )
     }
 

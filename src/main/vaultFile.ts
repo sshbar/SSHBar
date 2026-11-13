@@ -8,7 +8,9 @@ import type { Host, SecretKind, Snippet } from '../shared/types'
  * with any part of the file is detected on decrypt.
  */
 
-export const VAULT_FORMAT = 'sshbuddy-vault' as const
+export const VAULT_FORMAT = 'sshbar-vault' as const
+/** Files written before the app was renamed from SSHBuddy still open (and are rewritten in the new format). */
+const LEGACY_FORMATS = ['sshbuddy-vault']
 
 export interface KdfParams {
   name: 'scrypt'
@@ -19,7 +21,7 @@ export interface KdfParams {
 }
 
 export interface VaultEnvelope {
-  format: typeof VAULT_FORMAT
+  format: string
   version: 1
   kdf: KdfParams
   cipher: { name: 'aes-256-gcm'; iv: string }
@@ -79,10 +81,10 @@ export function parseEnvelope(text: string): VaultEnvelope {
   try {
     e = JSON.parse(text) as VaultEnvelope
   } catch {
-    throw new Error('This is not an SSHBuddy sync file (invalid JSON)')
+    throw new Error('This is not an SSHbar sync file (invalid JSON)')
   }
-  if (e?.format !== VAULT_FORMAT) throw new Error('This is not an SSHBuddy sync file')
-  if (e.version !== 1) throw new Error(`Unsupported sync file version ${String(e.version)} — update SSHBuddy`)
+  if (e?.format !== VAULT_FORMAT && !LEGACY_FORMATS.includes(e?.format)) throw new Error('This is not an SSHbar sync file')
+  if (e.version !== 1) throw new Error(`Unsupported sync file version ${String(e.version)} — update SSHbar`)
   if (e.cipher?.name !== 'aes-256-gcm' || !e.cipher.iv || !e.tag || typeof e.data !== 'string') throw new Error('The sync file is damaged')
   return e
 }

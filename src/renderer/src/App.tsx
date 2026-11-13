@@ -57,7 +57,7 @@ export function App() {
   return (
     <div className="app">
       <nav className="rail">
-        <div className="rail-logo" title="SSHBuddy">
+        <div className="rail-logo" title="SSHbar">
           <SquareTerminal size={22} />
         </div>
         <button className={`rail-btn ${active === 'hosts' ? 'on' : ''}`} onClick={() => setActive('hosts')} title="Hosts">

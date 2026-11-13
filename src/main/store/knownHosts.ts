@@ -98,7 +98,7 @@ interface StoreFile {
 }
 
 /**
- * Trust-on-first-use host key store. Keys accepted in SSHBuddy live in its own file;
+ * Trust-on-first-use host key store. Keys accepted in SSHbar live in its own file;
  * the user's ~/.ssh/known_hosts is consulted read-only so already-trusted hosts
  * don't prompt again.
  */

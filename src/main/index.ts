@@ -1,6 +1,6 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, safeStorage, shell, type IpcMainInvokeEvent } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { existsSync, promises as fs } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, promises as fs } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type {
@@ -33,7 +33,7 @@ import { convertTermix, isTermixExport } from './importers/termix'
 // Bootstrapping
 // ---------------------------------------------------------------------------
 
-if (process.env.SSHBUDDY_DATA_DIR) app.setPath('userData', process.env.SSHBUDDY_DATA_DIR)
+if (process.env.SSHBAR_DATA_DIR) app.setPath('userData', process.env.SSHBAR_DATA_DIR)
 
 const isPrimaryInstance = app.requestSingleInstanceLock()
 if (!isPrimaryInstance) app.quit()
@@ -64,6 +64,26 @@ const cipher: Cipher = {
 }
 
 const dataDir = app.getPath('userData')
+
+/**
+ * One-time move of hosts/settings from the folder used before the rename (SSHBuddy). Saved
+ * secrets are not copied: they were encrypted under the old app name's keychain entry, so the
+ * affected hosts simply ask for their password again.
+ */
+function migrateFromSSHBuddy(): void {
+  if (process.env.SSHBAR_DATA_DIR) return
+  const legacy = join(app.getPath('appData'), 'SSHBuddy')
+  if (legacy === dataDir || existsSync(join(dataDir, 'hosts.json')) || !existsSync(join(legacy, 'hosts.json'))) return
+  mkdirSync(dataDir, { recursive: true })
+  for (const f of ['hosts.json', 'settings.json', 'known_hosts.json', 'snippets.json']) {
+    try {
+      if (existsSync(join(legacy, f))) copyFileSync(join(legacy, f), join(dataDir, f))
+    } catch {
+      /* best effort */
+    }
+  }
+}
+migrateFromSSHBuddy()
 const hosts = new HostStore(dataDir)
 const secrets = new SecretStore(dataDir, cipher)
 const settings = new SettingsStore(dataDir)
@@ -278,17 +298,17 @@ function registerIpc(): void {
     if (!win) return false
     const res = await dialog.showSaveDialog(win, {
       title: 'Export hosts',
-      defaultPath: join(app.getPath('documents'), 'sshbuddy-hosts.json'),
+      defaultPath: join(app.getPath('documents'), 'sshbar-hosts.json'),
       filters: [{ name: 'JSON', extensions: ['json'] }]
     })
     if (res.canceled || !res.filePath) return false
-    await fs.writeFile(res.filePath, JSON.stringify({ app: 'SSHBuddy', version: 1, hosts: hosts.list() }, null, 2), { mode: 0o600 })
+    await fs.writeFile(res.filePath, JSON.stringify({ app: 'SSHbar', version: 1, hosts: hosts.list() }, null, 2), { mode: 0o600 })
     return true
   })
   handle('hosts:importJson', async (): Promise<ImportResult> => {
     if (!win) return { added: 0, skipped: 0 }
     const res = await dialog.showOpenDialog(win, {
-      title: 'Import hosts (SSHBuddy or Termix export)',
+      title: 'Import hosts (SSHbar or Termix export)',
       filters: [{ name: 'JSON', extensions: ['json'] }],
       properties: ['openFile']
     })
@@ -361,14 +381,14 @@ function registerIpc(): void {
     if (mode === 'create') {
       const res = await dialog.showSaveDialog(win, {
         title: 'Create sync file — pick a folder your devices sync (Dropbox, Syncthing, NAS…)',
-        defaultPath: join(app.getPath('documents'), 'sshbuddy-sync.json'),
-        filters: [{ name: 'SSHBuddy sync file', extensions: ['json'] }]
+        defaultPath: join(app.getPath('documents'), 'sshbar-sync.json'),
+        filters: [{ name: 'SSHbar sync file', extensions: ['json'] }]
       })
       return res.canceled ? null : (res.filePath ?? null)
     }
     const res = await dialog.showOpenDialog(win, {
-      title: 'Open an existing SSHBuddy sync file',
-      filters: [{ name: 'SSHBuddy sync file', extensions: ['json'] }],
+      title: 'Open an existing SSHbar sync file',
+      filters: [{ name: 'SSHbar sync file', extensions: ['json'] }],
       properties: ['openFile']
     })
     return res.canceled ? null : (res.filePaths[0] ?? null)
@@ -492,8 +512,9 @@ function registerIpc(): void {
   })
   handle('clipboard:read', () => clipboard.readText())
   handle('clipboard:write', (text: string) => clipboard.writeText(str(text)))
+  handle('app:info', () => ({ version: app.getVersion(), electron: process.versions.electron, platform: process.platform }))
   handle('shell:openExternal', async (url: string) => {
-    if (/^https?:\/\//i.test(str(url))) await shell.openExternal(url)
+    if (/^(https?:\/\/|mailto:)/i.test(str(url))) await shell.openExternal(url)
   })
 }
 
@@ -532,7 +553,7 @@ function createWindow(): void {
     minWidth: 920,
     minHeight: 560,
     show: false,
-    title: 'SSHBuddy',
+    title: 'SSHbar',
     backgroundColor: '#0f1218',
     autoHideMenuBar: true,
     icon: join(__dirname, '../../build/icon.png'),

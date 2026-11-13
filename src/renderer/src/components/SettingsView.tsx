@@ -5,6 +5,7 @@ import { api } from '../api'
 import { useStore } from '../store'
 import { dateTime, errorText } from '../format'
 import { FileSyncSection } from './FileSyncSection'
+import appIcon from '../../../../build/icon.png'
 
 function Section({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
   return (
@@ -29,6 +30,7 @@ export function SettingsView() {
   const [agentBusy, setAgentBusy] = useState(false)
   const [syncBusy, setSyncBusy] = useState(false)
   const [backend, setBackend] = useState<SecretBackendInfo | null>(null)
+  const [info, setInfo] = useState<{ version: string; electron: string } | null>(null)
   const [known, setKnown] = useState<KnownHostEntry[]>([])
   const [cliPath, setCliPath] = useState(settings?.protonPassCli ?? 'pass-cli')
 
@@ -50,6 +52,7 @@ export function SettingsView() {
     void checkPP()
     void api.secrets.backend().then(setBackend)
     void api.knownHosts.list().then(setKnown)
+    void api.appInfo().then(setInfo)
   }, [])
 
   if (!settings) return null
@@ -82,7 +85,7 @@ export function SettingsView() {
         <h1>Settings</h1>
       </div>
 
-      <Section title="Proton Pass" desc="SSHBuddy talks to the Proton Pass CLI to fetch passwords and SSH keys on demand. Nothing fetched is written to disk.">
+      <Section title="Proton Pass" desc="SSHbar talks to the Proton Pass CLI to fetch passwords and SSH keys on demand. Nothing fetched is written to disk.">
         <div className="row gap wrap">
           <label className="field grow">
             <span>CLI command or path</span>
@@ -151,7 +154,7 @@ export function SettingsView() {
 
       <Section
         title="Sync hosts through Proton Pass"
-        desc="Keeps your host list in an end-to-end encrypted Proton Pass note (“SSHBuddy Sync”) so every device sees the same connections. Only host details and references are synced — never passwords or keys saved on this device."
+        desc="Keeps your host list in an end-to-end encrypted Proton Pass note (“SSHbar Sync”) so every device sees the same connections. Only host details and references are synced — never passwords or keys saved on this device."
       >
         <label className="check">
           <input
@@ -253,7 +256,7 @@ export function SettingsView() {
           )}
         </div>
         <h3>Trusted host keys</h3>
-        <p className="muted small">Keys you accepted in SSHBuddy. Keys in ~/.ssh/known_hosts are also honoured (read-only).</p>
+        <p className="muted small">Keys you accepted in SSHbar. Keys in ~/.ssh/known_hosts are also honoured (read-only).</p>
         {known.length === 0 ? (
           <p className="muted small">No host keys trusted yet.</p>
         ) : (
@@ -293,6 +296,27 @@ export function SettingsView() {
           >
             <Upload size={14} /> Import hosts
           </button>
+        </div>
+      </Section>
+
+      <Section title="About">
+        <div className="about">
+          <img src={appIcon} alt="" width={44} height={44} />
+          <div>
+            <div>
+              <b>SSHbar</b> {info ? `v${info.version}` : ''} <span className="muted small">· MIT license</span>
+            </div>
+            <div className="muted small">
+              Made by Nicolae Orlov ·{' '}
+              <a href="#" onClick={(e) => (e.preventDefault(), void api.openExternal('https://nicuorlov.com'))}>
+                nicuorlov.com
+              </a>{' '}
+              ·{' '}
+              <a href="#" onClick={(e) => (e.preventDefault(), void api.openExternal('mailto:contact@nicuorlov.com'))}>
+                contact@nicuorlov.com
+              </a>
+            </div>
+          </div>
         </div>
       </Section>
     </div>

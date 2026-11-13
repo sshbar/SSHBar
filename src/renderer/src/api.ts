@@ -1,9 +1,9 @@
-import type { SSHBuddyApi } from '../../shared/api'
+import type { SSHbarApi } from '../../shared/api'
 
 declare global {
   interface Window {
-    sshbuddy: SSHBuddyApi
+    sshbar: SSHbarApi
   }
 }
 
-export const api: SSHBuddyApi = window.sshbuddy
+export const api: SSHbarApi = window.sshbar

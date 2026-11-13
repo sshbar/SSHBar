@@ -1,11 +1,11 @@
 /**
  * Read-only checks against the real Proton Pass CLI (never views item contents).
- * Run with SSHBUDDY_PP_LIVE=1 npx vitest run test/protonpass.live.test.ts
+ * Run with SSHBAR_PP_LIVE=1 npx vitest run test/protonpass.live.test.ts
  */
 import { describe, expect, it } from 'vitest'
 import { ProtonPass, defaultAgentSocket, resolveCli } from '../src/main/protonpass'
 
-const d = process.env.SSHBUDDY_PP_LIVE ? describe : describe.skip
+const d = process.env.SSHBAR_PP_LIVE ? describe : describe.skip
 
 d('Proton Pass CLI (live, read-only)', () => {
   const pp = new ProtonPass(() => 'pass-cli')

@@ -357,7 +357,7 @@ export function HostEditor({ initial }: { initial: HostInput }) {
             )}
             {a.agent === 'protonpass' && (
               <p className="muted small">
-                Uses the SSH keys stored in Proton Pass through <code>pass-cli ssh-agent</code>. SSHBuddy starts the agent daemon if it isn’t
+                Uses the SSH keys stored in Proton Pass through <code>pass-cli ssh-agent</code>. SSHbar starts the agent daemon if it isn’t
                 running.
               </p>
             )}

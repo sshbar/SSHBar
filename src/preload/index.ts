@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
-import type { SSHBuddyApi, Unsubscribe } from '../shared/api'
+import type { SSHbarApi, Unsubscribe } from '../shared/api'
 
 function on<T extends unknown[]>(channel: string, cb: (...args: T) => void): Unsubscribe {
   const listener = (_e: IpcRendererEvent, ...args: unknown[]): void => cb(...(args as T))
@@ -11,7 +11,7 @@ function on<T extends unknown[]>(channel: string, cb: (...args: T) => void): Uns
 
 const invoke = ipcRenderer.invoke.bind(ipcRenderer)
 
-const api: SSHBuddyApi = {
+const api: SSHbarApi = {
   platform: process.platform,
 
   hosts: {
@@ -122,7 +122,8 @@ const api: SSHBuddyApi = {
   },
 
   pathForFile: (file) => webUtils.getPathForFile(file),
-  openExternal: (url) => invoke('shell:openExternal', url)
+  openExternal: (url) => invoke('shell:openExternal', url),
+  appInfo: () => invoke('app:info')
 }
 
-contextBridge.exposeInMainWorld('sshbuddy', api)
+contextBridge.exposeInMainWorld('sshbar', api)

@@ -1,4 +1,4 @@
-// Converts a Termix host export ("Export hosts" / share JSON) into SSHBuddy hosts.
+// Converts a Termix host export ("Export hosts" / share JSON) into SSHbar hosts.
 // Self-contained (type-only imports) so scripts can run it directly with Node's type stripping.
 import { randomUUID } from 'node:crypto'
 import type { HostAuth, HostInput } from '../../shared/types'

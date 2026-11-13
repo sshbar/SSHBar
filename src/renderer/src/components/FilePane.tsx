@@ -34,7 +34,7 @@ export interface FileSource {
   open(entry: FileEntry): void
 }
 
-export const DRAG_MIME = 'application/x-sshbuddy-files'
+export const DRAG_MIME = 'application/x-sshbar-files'
 
 type SortKey = 'name' | 'size' | 'mtime'
 
@@ -209,7 +209,7 @@ export function FilePane({
       return
     }
     if (onDropFromOs && e.dataTransfer.files.length) {
-      const paths = [...e.dataTransfer.files].map((f) => window.sshbuddy.pathForFile(f)).filter(Boolean)
+      const paths = [...e.dataTransfer.files].map((f) => window.sshbar.pathForFile(f)).filter(Boolean)
       if (paths.length) onDropFromOs(paths)
     }
   }

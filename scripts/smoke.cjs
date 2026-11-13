@@ -6,8 +6,8 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 
-const out = process.env.SMOKE_OUT || fs.mkdtempSync(path.join(os.tmpdir(), 'sshbuddy-smoke-'))
-const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sshbuddy-data-'))
+const out = process.env.SMOKE_OUT || fs.mkdtempSync(path.join(os.tmpdir(), 'sshbar-smoke-'))
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sshbar-data-'))
 const now = Date.now()
 const host = (id, label, group, extra) => ({
   id, label, group, hostname: '127.0.0.1', port: Number(process.env.SMOKE_PORT || 2222), username: 'tester',
@@ -33,7 +33,7 @@ fs.writeFileSync(path.join(dataDir, 'snippets.json'), JSON.stringify({
     { id: 's3', name: 'Follow syslog', command: 'sudo journalctl -f', createdAt: now, updatedAt: now }
   ]
 }))
-process.env.SSHBUDDY_DATA_DIR = dataDir
+process.env.SSHBAR_DATA_DIR = dataDir
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const log = (...a) => console.log('[smoke]', ...a)

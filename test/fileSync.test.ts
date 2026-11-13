@@ -52,13 +52,13 @@ describe('vault file crypto', () => {
     const flipped = Buffer.from(env.data, 'base64')
     flipped[0] ^= 1
     expect(() => decryptVault({ ...env, data: flipped.toString('base64') }, key)).toThrow(WrongPasswordError)
-    expect(() => parseEnvelope('{"hello":1}')).toThrow(/not an SSHBuddy sync file/)
+    expect(() => parseEnvelope('{"hello":1}')).toThrow(/not an SSHbar sync file/)
   })
 })
 
 describe('encrypted sync file across devices', () => {
   const folder = mkdtempSync(join(tmpdir(), 'sb-shared-'))
-  const path = join(folder, 'sshbuddy-sync.json')
+  const path = join(folder, 'sshbar-sync.json')
   const a = device()
   const b = device()
   let webId = ''
@@ -71,7 +71,7 @@ describe('encrypted sync file across devices', () => {
     expect(res).toMatchObject({ ok: true, pushed: 1 })
     const text = readFileSync(path, 'utf8')
     expect(text).not.toMatch(/web\.example|pw-web|deploy/)
-    expect(JSON.parse(text)).toMatchObject({ format: 'sshbuddy-vault', kdf: { name: 'scrypt' }, cipher: { name: 'aes-256-gcm' } })
+    expect(JSON.parse(text)).toMatchObject({ format: 'sshbar-vault', kdf: { name: 'scrypt' }, cipher: { name: 'aes-256-gcm' } })
     // master password remembered via the keychain store
     expect(await a.secrets.get(MASTER_PASSWORD_ID, 'password')).toBe(PASSWORD)
   })
@@ -184,5 +184,20 @@ describe('encrypted sync file across devices', () => {
     const res = await a.sync.sync()
     expect(res.ok).toBe(false)
     expect(a.hosts.list()).toHaveLength(before)
+  })
+})
+
+describe('sync files written before the rename', () => {
+  it('still opens a file in the old "sshbuddy-vault" format', async () => {
+    const { createCipheriv, randomBytes } = await import('node:crypto')
+    const kdf = newKdf(2 ** 14)
+    const key = await deriveKey('legacy-pass-123', kdf)
+    const iv = randomBytes(12)
+    const head = { format: 'sshbuddy-vault', version: 1 as const, kdf, cipher: { name: 'aes-256-gcm' as const, iv: iv.toString('base64') } }
+    const c = createCipheriv('aes-256-gcm', key, iv)
+    c.setAAD(Buffer.from(JSON.stringify([head.format, head.version, head.kdf, head.cipher])))
+    const data = Buffer.concat([c.update(JSON.stringify({ v: 1, at: 1, hosts: [], deleted: {}, secrets: { h: { password: 'old' } } })), c.final()])
+    const env = parseEnvelope(JSON.stringify({ ...head, tag: c.getAuthTag().toString('base64'), data: data.toString('base64') }))
+    expect(decryptVault(env, key).secrets.h.password).toBe('old')
   })
 })

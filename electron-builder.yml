@@ -1,6 +1,6 @@
-appId: app.sshbuddy.client
-productName: SSHBuddy
-copyright: Copyright © 2026 SSHBuddy
+appId: com.nicuorlov.sshbar
+productName: SSHbar
+copyright: Copyright © 2026 Nicolae Orlov
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 directories:
   buildResources: build
@@ -32,8 +32,9 @@ linux:
   icon: build/icon.png
   synopsis: SSH client with SFTP, live stats and Proton Pass integration
   description: Cross-platform SSH client with a file manager, port forwarding, jump hosts, live server stats and Proton Pass integration.
-  maintainer: SSHBuddy <sshbuddy@users.noreply.local>
-  executableName: sshbuddy
+  maintainer: Nicolae Orlov <contact@nicuorlov.com>
+  vendor: Nicolae Orlov
+  executableName: sshbar
   syncDesktopName: true
 appImage:
   artifactName: ${productName}-${version}-x86_64.AppImage
@@ -48,14 +49,14 @@ win:
     - target: portable
       arch: [x64]
   icon: build/icon.png
-  executableName: SSHBuddy
+  executableName: SSHbar
 nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: SSHBuddy
+  shortcutName: SSHbar
   artifactName: ${productName}-Setup-${version}-x64.${ext}
 portable:
   artifactName: ${productName}-${version}-portable-x64.${ext}

@@ -29,9 +29,9 @@ const pp: HostAuth = {
 }
 
 describe('Termix import', () => {
-  it('recognises Termix exports but not SSHBuddy ones', () => {
+  it('recognises Termix exports but not SSHbar ones', () => {
     expect(isTermixExport(sample)).toBe(true)
-    expect(isTermixExport({ app: 'SSHBuddy', version: 1, hosts: [{ id: 'x', hostname: 'a' }] })).toBe(false)
+    expect(isTermixExport({ app: 'SSHbar', version: 1, hosts: [{ id: 'x', hostname: 'a' }] })).toBe(false)
     expect(isTermixExport({ hosts: [] })).toBe(false)
   })
 
@@ -44,7 +44,7 @@ describe('Termix import', () => {
     expect(by.pi.auth.method).toBe('key') // own key -> same key auth
     expect(by.router).toMatchObject({ group: 'Remote', auth: { method: 'password', password: { source: 'prompt' } } })
     expect(by.svc).toMatchObject({ username: 'svc', auth: { method: 'password' } }) // password credential
-    // every converted host passes SSHBuddy's validation
+    // every converted host passes SSHbar's validation
     for (const h of hosts) expect(() => sanitizeHost(h)).not.toThrow()
   })
 

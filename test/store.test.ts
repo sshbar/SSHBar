@@ -10,7 +10,7 @@ const listeners = { ssh: [] as Listener<SessionEvent>[], prompt: [] as Listener<
 const noop = () => () => undefined
 
 ;(globalThis as unknown as { window: unknown }).window = {
-  sshbuddy: {
+  sshbar: {
     platform: 'linux',
     hosts: { list: async () => [], onChanged: noop },
     settings: { get: async () => ({}), onChanged: noop },

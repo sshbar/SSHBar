@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      # --ignore-scripts: nothing needs install scripts (Electron downloads lazily, ssh2's native helper is optional)
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm test
+      - name: Integration tests against OpenSSH servers in Docker
+        run: |
+          eval "$(scripts/it-server.sh)"
+          SSHBAR_IT_JUMP=1 npx vitest run test/ssh.integration.test.ts
+      - name: Stop test servers
+        if: always()
+        run: scripts/it-server.sh stop

@@ -81,7 +81,7 @@ export function HostsView() {
         <button className="btn" onClick={importSsh} title="Import hosts from ~/.ssh/config">
           <Import size={15} /> SSH config
         </button>
-        <button className="btn" onClick={importJson} title="Import hosts from an SSHBuddy JSON export">
+        <button className="btn" onClick={importJson} title="Import hosts from an SSHbar JSON export">
           <Upload size={15} /> Import
         </button>
         <button className="btn primary" onClick={() => openEditor(emptyHost())}>

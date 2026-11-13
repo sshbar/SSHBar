@@ -1,6 +1,6 @@
 /**
  * Integration tests against a real OpenSSH server. Run with:
- *   SSHBUDDY_IT_KEYDIR=/path/with/id_plain,id_enc SSHBUDDY_IT_PORT=2222 npx vitest run test/ssh.integration.test.ts
+ *   SSHBAR_IT_KEYDIR=/path/with/id_plain,id_enc SSHBAR_IT_PORT=2222 npx vitest run test/ssh.integration.test.ts
  * (see scripts/it-server.sh for a disposable Docker server)
  */
 import { mkdtempSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
@@ -16,15 +16,15 @@ import { TransferManager } from '../src/main/transfers'
 import { DEFAULT_SETTINGS } from '../src/shared/defaults'
 import type { ProtonPass } from '../src/main/protonpass'
 
-const KEYDIR = process.env.SSHBUDDY_IT_KEYDIR
-const PORT = Number(process.env.SSHBUDDY_IT_PORT ?? 2222)
-const USER = process.env.SSHBUDDY_IT_USER ?? 'tester'
-const PASSWORD = process.env.SSHBUDDY_IT_PASSWORD ?? 's3cret-pw'
+const KEYDIR = process.env.SSHBAR_IT_KEYDIR
+const PORT = Number(process.env.SSHBAR_IT_PORT ?? 2222)
+const USER = process.env.SSHBAR_IT_USER ?? 'tester'
+const PASSWORD = process.env.SSHBAR_IT_PASSWORD ?? 's3cret-pw'
 const PASSPHRASE = 'correct horse'
 
 const d = KEYDIR ? describe : describe.skip
-/** set SSHBUDDY_IT_JUMP=1 when scripts/it-server.sh also started the private "sb-target" server */
-const dj = KEYDIR && process.env.SSHBUDDY_IT_JUMP ? describe : describe.skip
+/** set SSHBAR_IT_JUMP=1 when scripts/it-server.sh also started the private "sb-target" server */
+const dj = KEYDIR && process.env.SSHBAR_IT_JUMP ? describe : describe.skip
 const dataDir = mkdtempSync(join(tmpdir(), 'sb-it-'))
 const savedHosts = new Map<string, Host>()
 const knownHosts = new KnownHostsStore(dataDir, [])

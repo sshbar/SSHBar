@@ -1231,6 +1231,12 @@ p {
   background: var(--danger);
 }
 
+.about {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 /* ---------- snippets ---------- */
 kbd {
   font-family: var(--mono);

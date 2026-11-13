@@ -1,0 +1,94 @@
+name: Release
+
+# Push a tag like v0.2.0 to build Linux + Windows packages and publish them as a GitHub release.
+# "Run workflow" (manual) builds the packages as downloadable artifacts without publishing.
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version number for a test build (not published)
+        required: false
+        default: 0.0.0-dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm test
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: windows-latest
+            platform: win
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Set version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then VERSION="${GITHUB_REF_NAME#v}"; else VERSION="${INPUT_VERSION:-0.0.0-dev}"; fi
+          echo "Building version $VERSION"
+          npm pkg set version="$VERSION"
+      - run: npm ci --ignore-scripts
+      - run: npx electron-vite build
+      - name: Package (${{ matrix.platform }})
+        run: npx electron-builder --${{ matrix.platform }} --publish never
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sshbar-${{ matrix.platform }}
+          if-no-files-found: error
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.exe
+
+  release:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: release
+          merge-multiple: true
+      - name: Checksums
+        working-directory: release
+        run: sha256sum -- * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v3
+        with:
+          name: SSHbar ${{ github.ref_name }}
+          files: release/*
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}

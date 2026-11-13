@@ -26,8 +26,8 @@ import type {
 
 export type Unsubscribe = () => void
 
-/** The API the preload script exposes to the renderer as `window.sshbuddy`. */
-export interface SSHBuddyApi {
+/** The API the preload script exposes to the renderer as `window.sshbar`. */
+export interface SSHbarApi {
   platform: string
 
   hosts: {
@@ -140,4 +140,5 @@ export interface SSHBuddyApi {
   /** Resolve the absolute path of a File dropped from the OS. */
   pathForFile(file: File): string
   openExternal(url: string): Promise<void>
+  appInfo(): Promise<{ version: string; electron: string; platform: string }>
 }

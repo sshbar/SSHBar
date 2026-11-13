@@ -3,13 +3,13 @@
 #   scripts/it-server.sh        start (prints the env vars to export)
 #   scripts/it-server.sh stop   remove everything
 #
-# sshbuddy-it         published on 127.0.0.1:2222, TCP forwarding enabled (bastion / port-forward tests)
-# sshbuddy-it-target  NOT published; reachable only as "sb-target:2222" from inside the bastion's network
+# sshbar-it         published on 127.0.0.1:2222, TCP forwarding enabled (bastion / port-forward tests)
+# sshbar-it-target  NOT published; reachable only as "sb-target:2222" from inside the bastion's network
 set -euo pipefail
-NET=sshbuddy-it-net
-BASTION=sshbuddy-it
-TARGET=sshbuddy-it-target
-DIR="${SSHBUDDY_IT_KEYDIR:-$(pwd)/test/.data}"
+NET=sshbar-it-net
+BASTION=sshbar-it
+TARGET=sshbar-it-target
+DIR="${SSHBAR_IT_KEYDIR:-$(pwd)/test/.data}"
 
 if [[ "${1:-}" == "stop" ]]; then
   docker rm -f "$BASTION" "$TARGET" >/dev/null 2>&1 || true
@@ -19,8 +19,8 @@ if [[ "${1:-}" == "stop" ]]; then
 fi
 
 mkdir -p "$DIR"
-[[ -f "$DIR/id_plain" ]] || ssh-keygen -q -t ed25519 -N '' -f "$DIR/id_plain" -C sshbuddy-it-plain
-[[ -f "$DIR/id_enc" ]] || ssh-keygen -q -t ed25519 -N 'correct horse' -f "$DIR/id_enc" -C sshbuddy-it-enc
+[[ -f "$DIR/id_plain" ]] || ssh-keygen -q -t ed25519 -N '' -f "$DIR/id_plain" -C sshbar-it-plain
+[[ -f "$DIR/id_enc" ]] || ssh-keygen -q -t ed25519 -N 'correct horse' -f "$DIR/id_enc" -C sshbar-it-enc
 docker rm -f "$BASTION" "$TARGET" >/dev/null 2>&1 || true
 docker network inspect "$NET" >/dev/null 2>&1 || docker network create "$NET" >/dev/null
 
@@ -44,4 +44,4 @@ sleep 1
 docker exec "$BASTION" sh -c 'sed -i "s/^AllowTcpForwarding no/AllowTcpForwarding yes/" /config/sshd/sshd_config && kill -HUP $(pgrep -f "^sshd")'
 sleep 1
 for _ in $(seq 1 40); do (echo >/dev/tcp/127.0.0.1/2222) 2>/dev/null && break; sleep 0.5; done
-echo "export SSHBUDDY_IT_KEYDIR=$DIR SSHBUDDY_IT_PORT=2222"
+echo "export SSHBAR_IT_KEYDIR=$DIR SSHBAR_IT_PORT=2222"

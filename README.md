@@ -1,6 +1,19 @@
-# SSHBuddy
+<p align="center"><img src="build/icon.png" width="96" alt="SSHbar icon"></p>
 
-A cross-platform SSH client in the spirit of Termius, built with Electron, React, xterm.js and ssh2, and integrated with the Proton Pass CLI.
+# SSHbar
+
+**SSH + *bar*, Romanian for pub: the place where all your servers meet.**
+
+A cross-platform SSH client for Linux and Windows: terminal, file manager, port forwarding, jump hosts and live server stats. It integrates with Proton Pass and syncs between your devices through an encrypted file, with no server or account.
+
+**[⬇ Download the latest release](../../releases/latest)** · [All versions](../../releases) · [nicuorlov.com](https://nicuorlov.com)
+
+| Platform | File |
+|---|---|
+| Linux | `SSHbar-<version>-x86_64.AppImage` (make it executable and run), or `sshbar_<version>_amd64.deb` |
+| Windows | `SSHbar-Setup-<version>-x64.exe` (installer) or `SSHbar-<version>-portable-x64.exe` (no install) |
+
+The Windows builds aren't code-signed yet, so SmartScreen may warn: choose *More info → Run anyway*.
 
 ## Features
 
@@ -18,7 +31,7 @@ A cross-platform SSH client in the spirit of Termius, built with Electron, React
 | **Live stats (bottom panel)** | CPU % with sparkline, RAM (and swap), network ↓/↑ throughput, disk usage per mount, load average and uptime. Read from `/proc` over the existing connection, so nothing is installed on the server. |
 | **Security** | Trust-on-first-use host key verification with a loud warning when a key changes. `~/.ssh/known_hosts` is honoured (read-only). Secrets saved on a device are encrypted with the OS keychain. Sandboxed renderer with a strict CSP. |
 
-## Quick start
+## Building from source
 
 ```bash
 npm install
@@ -35,10 +48,10 @@ Requires Node 20+ (tested with Node 24). With npm 11 the Electron binary downloa
 To give all key-based hosts a Proton Pass SSH key in one go, convert first:
 
 ```bash
-node --no-warnings scripts/convert-termix.mjs termix-hosts.json sshbuddy-hosts.json --pp-key "Personal/My SSH Key"
+node --no-warnings scripts/convert-termix.mjs termix-hosts.json sshbar-hosts.json --pp-key "Personal/My SSH Key"
 ```
 
-Then import `sshbuddy-hosts.json`. Only the Proton Pass item reference is written, never the key. Importing the same hosts twice skips the duplicates.
+Then import `sshbar-hosts.json`. Only the Proton Pass item reference is written, never the key. Importing the same hosts twice skips the duplicates.
 
 ## Sharing hosts between devices (no server)
 
@@ -64,37 +77,37 @@ Install the [Proton Pass CLI](https://proton.me/pass) and log in once in a termi
 pass-cli login
 ```
 
-Then in **Settings → Proton Pass**, press *Check*. GUI apps on macOS don't inherit your shell `PATH`, so SSHBuddy also looks in `~/.local/bin`, `/opt/homebrew/bin` and `/usr/local/bin`. If `pass-cli` lives somewhere else, set the full path there.
+Then in **Settings → Proton Pass**, press *Check*. GUI apps on macOS don't inherit your shell `PATH`, so SSHbar also looks in `~/.local/bin`, `/opt/homebrew/bin` and `/usr/local/bin`. If `pass-cli` lives somewhere else, set the full path there.
 
 | What | How it's used |
 |---|---|
-| Password from Proton Pass | In the host editor choose *Password → Proton Pass* and pick a Login item. At connect time SSHBuddy runs `pass-cli item view --output json` and uses the item's password. |
+| Password from Proton Pass | In the host editor choose *Password → Proton Pass* and pick a Login item. At connect time SSHbar runs `pass-cli item view --output json` and uses the item's password. |
 | SSH key from Proton Pass | Choose *SSH key → Proton Pass* and pick an SSH Key item. If the key is encrypted, a custom field named `passphrase` on the item is used automatically. Otherwise you're asked once, and can save the passphrase on the device. |
-| Proton Pass SSH agent | Choose *SSH agent → Proton Pass agent*. SSHBuddy runs `pass-cli ssh-agent daemon start --socket-path …` if the agent isn't running. |
-| Host sync | **Settings → Sync hosts through Proton Pass** → pick a vault. SSHBuddy creates a note named **"SSHBuddy Sync"** and stores the host list in its `sshbuddy_hosts` field (gzip+base64 when large). Each device merges per host, newest change wins, and deletions propagate. |
+| Proton Pass SSH agent | Choose *SSH agent → Proton Pass agent*. SSHbar runs `pass-cli ssh-agent daemon start --socket-path …` if the agent isn't running. |
+| Host sync | **Settings → Sync hosts through Proton Pass** → pick a vault. SSHbar creates a note named **"SSHbar Sync"** and stores the host list in its `sshbar_hosts` field (gzip+base64 when large). Each device merges per host, newest change wins, and deletions propagate. |
 
 Secrets fetched from Proton Pass are never written to disk. The sync payload contains host details and **references** (Proton Pass item IDs, key file paths, "saved on this device" markers), never passwords or keys.
 
 ## Where data lives
 
-All files are in the app data directory (`~/.config/SSHBuddy` on Linux, `%APPDATA%\SSHBuddy` on Windows, `~/Library/Application Support/SSHBuddy` on macOS). They're written atomically with mode `0600`.
+All files are in the app data directory (`~/.config/SSHbar` on Linux, `%APPDATA%\SSHbar` on Windows, `~/Library/Application Support/SSHbar` on macOS). They're written atomically with mode `0600`.
 
 | File | Contents |
 |---|---|
 | `hosts.json` | Host list plus deletion tombstones (for sync). No secrets. |
 | `secrets.json` | Passwords, keys and passphrases you chose to *save on this device*, encrypted with Electron `safeStorage`: macOS Keychain, Windows DPAPI, or libsecret/KWallet on Linux. If Linux has no keyring, saving is disabled instead of falling back to plain text. |
-| `known_hosts.json` | Host keys you trusted in SSHBuddy. |
+| `known_hosts.json` | Host keys you trusted in SSHbar. |
 | `settings.json` | Preferences. |
 | *your sync file* | Optional, wherever you put it. Encrypted with your master password. |
 
-Set `SSHBUDDY_DATA_DIR` to use a different directory, for example for a portable install or tests.
+Set `SSHBAR_DATA_DIR` to use a different directory, for example for a portable install or tests.
 
 ## Packaging
 
 | Command | Output (in `dist/`) |
 |---|---|
-| `npm run dist:linux` | `SSHBuddy-<version>-x86_64.AppImage`: a single executable (`chmod +x`, then run). `sshbuddy_<version>_amd64.deb`: installs to `/opt/SSHBuddy` with a `sshbuddy` command, a menu entry and the AppArmor profile Ubuntu 24.04+ needs. |
-| `npm run dist:win:docker` | `SSHBuddy-Setup-<version>-x64.exe` (installer with Start-menu and desktop shortcuts and an uninstaller) and `SSHBuddy-<version>-portable-x64.exe` (no install). Built on Linux inside electron-builder's official Docker image, which brings its own Wine. |
+| `npm run dist:linux` | `SSHbar-<version>-x86_64.AppImage`: a single executable (`chmod +x`, then run). `sshbar_<version>_amd64.deb`: installs to `/opt/SSHbar` with a `sshbar` command, a menu entry and the AppArmor profile Ubuntu 24.04+ needs. |
+| `npm run dist:win:docker` | `SSHbar-Setup-<version>-x64.exe` (installer with Start-menu and desktop shortcuts and an uninstaller) and `SSHbar-<version>-portable-x64.exe` (no install). Built on Linux inside electron-builder's official Docker image, which brings its own Wine. |
 | `npm run dist:win:portable` | Only the portable `.exe`. Needs no Wine or Docker. |
 | `npm run dist:win` | Both Windows files, when run on Windows (or Linux with Wine installed). |
 | `npm run dist:mac` | DMG. Build on macOS; sign and notarize for distribution. |
@@ -109,7 +122,7 @@ npm test             # unit tests: stats parser, known_hosts, sync merge, encryp
 npm run test:it      # starts OpenSSH servers in Docker (scripts/it-server.sh) and runs SSH/SFTP/jump-host integration tests
 npm run test:smoke   # headless Electron run: connect, type in the terminal, open files/settings, save screenshots
                      # set ELECTRON_RENDERER_URL=<vite dev server url> to run it against React dev mode (StrictMode)
-SSHBUDDY_PP_LIVE=1 npx vitest run test/protonpass.live.test.ts   # read-only checks against your real pass-cli
+SSHBAR_PP_LIVE=1 npx vitest run test/protonpass.live.test.ts   # read-only checks against your real pass-cli
 ```
 
 The integration suite covers port forwarding (local, remote and SOCKS5 with server-side name resolution, auto-start, port-in-use errors), jump hosts (to a server that is only reachable through the bastion), password, retry and cancel, plain and encrypted keys, keys from Proton Pass, key-to-password fallback, host-key change detection, connection-refused errors, live stats, and SFTP folder upload/download round-trips with byte-level comparison and cancellation. Host sync runs against a fake `pass-cli` (`test/fixtures/fake-pass-cli.mjs`) that simulates two devices.
@@ -118,7 +131,7 @@ The integration suite covers port forwarding (local, remote and SOCKS5 with serv
 
 ```
 src/
-  shared/            types + the preload API contract (SSHBuddyApi)
+  shared/            types + the preload API contract (SSHbarApi)
   main/              Electron main process (all network, file and secret access)
     index.ts         window, IPC handlers (sender-checked), prompt broker, sync scheduling
     ssh/session.ts   one SSH connection: auth state machine, host-key check, shell, stats channel, SFTP channels
@@ -129,7 +142,7 @@ src/
     sync.ts          Proton Pass host sync (merge, tombstones, compression)
     sshconfig.ts     ~/.ssh/config import (Include, wildcards, first-match-wins)
     store/           hosts, encrypted secrets, settings, known hosts
-  preload/index.ts   contextBridge → window.sshbuddy
+  preload/index.ts   contextBridge → window.sshbar
   renderer/src/      React UI (zustand store, xterm terminal, file panes, stats bar, dialogs)
 ```
 
@@ -142,3 +155,20 @@ The renderer runs sandboxed with `contextIsolation` and has no Node access. Save
 - Only run-tested on Linux. The Windows installer and portable `.exe` are built and contain the app's icon and version info, but they haven't been run on Windows yet. macOS builds are configured but unverified.
 - Proton Pass sync was tested against a simulated CLI. Its write commands (`item create note`, `item update --field`) come from `pass-cli --help` but haven't been run against a real vault yet.
 - No split panes, broadcast-to-many-sessions or mobile apps yet.
+
+## Releases
+
+Pushing a version tag builds and publishes a release automatically ([`.github/workflows/release.yml`](.github/workflows/release.yml)):
+
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+GitHub Actions runs the tests, builds Linux (AppImage, .deb) and Windows (installer, portable) on native runners, and attaches the files and a `SHA256SUMS.txt` to a new release named after the tag. The version inside the apps comes from the tag. A tag with a suffix such as `v0.2.0-beta.1` is published as a pre-release.
+
+## Contact & license
+
+Made by Nicolae Orlov, [nicuorlov.com](https://nicuorlov.com), contact@nicuorlov.com. Report security issues privately as described in [SECURITY.md](SECURITY.md).
+
+Released under the [MIT license](LICENSE).
+

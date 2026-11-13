@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Convert a Termix host export into an SSHBuddy import file.
+// Convert a Termix host export into an SSHbar import file.
 //   node --no-warnings scripts/convert-termix.mjs <termix.json> <out.json> [--pp-key "<Vault>/<SSH key item title>"]
 // --pp-key: hosts that used a key in Termix get this Proton Pass SSH key item (resolved with pass-cli;
 //           only the item's ids are stored, never the key itself).
@@ -42,7 +42,7 @@ const { hosts, skipped } = convertTermix(data, { keyAuth })
 const now = Date.now()
 writeFileSync(
   output,
-  JSON.stringify({ app: 'SSHBuddy', version: 1, source: 'termix', hosts: hosts.map((h) => ({ ...h, createdAt: now, updatedAt: now })) }, null, 2),
+  JSON.stringify({ app: 'SSHbar', version: 1, source: 'termix', hosts: hosts.map((h) => ({ ...h, createdAt: now, updatedAt: now })) }, null, 2),
   { mode: 0o600 }
 )
 const count = (pred) => hosts.filter(pred).length
