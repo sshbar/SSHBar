@@ -1,6 +1,6 @@
 // Tiny Chrome DevTools Protocol client for the app's WebView on an emulator/device (debug builds).
 //   import { connectWebView } from './android-cdp.mjs'
-//   const page = await connectWebView('com.nicuorlov.sshbar')
+//   const page = await connectWebView('com.nicuorlov.sshbar.dev') // debug builds use the .dev app id
 //   await page.eval('document.title')
 import { execFileSync } from 'node:child_process'
 

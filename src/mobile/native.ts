@@ -25,6 +25,14 @@ export interface KbdPromptEvent {
   echo: boolean
 }
 
+export interface SmbTarget {
+  host: string
+  port: number
+  share: string
+  username: string
+  password: string
+}
+
 export interface SshBridgePlugin {
   appInfo(): Promise<{ version: string }>
   readText(o: { name: string }): Promise<{ data: string | null }>
@@ -42,6 +50,11 @@ export interface SshBridgePlugin {
   readUri(o: { uri: string }): Promise<{ data: string | null }>
   writeUri(o: { uri: string; data: string }): Promise<void>
   scrypt(o: { password: string; salt: string; N: number; r: number; p: number; dkLen: number }): Promise<{ key: string }>
+
+  /** Files on an SMB share (NAS); paths are inside the share. smbRead gives null for a missing file. */
+  smbList(o: SmbTarget & { path: string }): Promise<{ entries: { name: string; dir: boolean; size: number; modified: number }[] }>
+  smbRead(o: SmbTarget & { path: string }): Promise<{ data: string | null }>
+  smbWrite(o: SmbTarget & { path: string; data: string }): Promise<void>
 
   /** TCP (or tunnel via viaId) + key exchange. Nothing is authenticated yet; the caller verifies the host key. */
   sshOpen(o: { id: string; host: string; port: number; viaId?: string }): Promise<HostKeyInfo>

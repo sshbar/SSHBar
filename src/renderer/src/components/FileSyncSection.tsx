@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { CircleCheck, CircleX, FilePlus2, FolderOpen, LoaderCircle, Lock, RefreshCw } from 'lucide-react'
+import { CircleCheck, CircleX, FilePlus2, FolderOpen, HardDrive, LoaderCircle, Lock, RefreshCw } from 'lucide-react'
 import { api } from '../api'
 import { useStore } from '../store'
 import { errorText } from '../format'
+import { SmbBrowser } from './SmbBrowser'
 
 type Setup = { mode: 'create' | 'open'; path: string }
 
@@ -18,6 +19,7 @@ export function FileSyncSection() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [changing, setChanging] = useState(false)
+  const [nas, setNas] = useState(false)
 
   if (!status) return null
 
@@ -78,16 +80,33 @@ export function FileSyncSection() {
 
   // ----- not set up yet -----
   if (!status.enabled) {
+    if (!setup && nas) {
+      return (
+        <SmbBrowser
+          onPick={(path, mode) => {
+            reset()
+            setNas(false)
+            setSetup({ mode, path })
+          }}
+          onCancel={() => setNas(false)}
+        />
+      )
+    }
     if (!setup) {
       return (
         <>
           <p className="muted small">
-            {api.platform === 'android'
-              ? 'Choose “Use existing sync file”, then in the picker tap ☰ (top left) to see Google Drive, OneDrive, Proton Drive, Dropbox and other apps that share files. For a NAS (SMB) share, install “CIFS Documents Provider” first so the share appears there too. Enter the same master password as on your computer.'
+            {api.fileSync.smb
+              ? 'Keep the file on your NAS (SMB): SSHbar opens the share itself. A file in Google Drive, Proton Drive, OneDrive or Dropbox works too: choose “Use existing sync file”, then tap ☰ (top left) in the picker. Enter the same master password as on your computer.'
               : 'Put the file in any folder your computers already sync — Dropbox, OneDrive, iCloud Drive, Syncthing, Proton Drive or a NAS share. No server or account is needed. Everything in it is encrypted with your master password (scrypt + AES-256-GCM).'}
           </p>
           <div className="row gap wrap">
-            <button className="btn primary" onClick={() => void choose('create')}>
+            {api.fileSync.smb && (
+              <button className="btn primary" onClick={() => (setError(''), setNas(true))}>
+                <HardDrive size={14} /> On a NAS (SMB)…
+              </button>
+            )}
+            <button className={api.fileSync.smb ? 'btn' : 'btn primary'} onClick={() => void choose('create')}>
               <FilePlus2 size={14} /> Create sync file…
             </button>
             <button className="btn" onClick={() => void choose('open')}>

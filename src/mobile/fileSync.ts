@@ -1,5 +1,6 @@
 // The encrypted sync file on Android: the shared merge core (src/shared/vaultSync.ts) with WebCrypto
-// AES-GCM, native scrypt, and the file reached through Android's document providers (Drive, Dropbox…).
+// AES-GCM, native scrypt, and the file reached through Android's document providers (Drive, Dropbox…)
+// or directly on a NAS share (smb://…, see ./smb.ts).
 import type { FileSyncStatus, SecretKind, SyncResult } from '../shared/types'
 import {
   VAULT_FORMAT,
@@ -17,6 +18,8 @@ import {
   type VaultPayload
 } from '../shared/vaultSync'
 import { Native } from './native'
+import { isSmbPath } from '../shared/smbPath'
+import { smbReadFile, smbWriteFile } from './smb'
 import type { MobileHosts, MobileSettings, MobileSnippets } from './stores'
 
 const MASTER_KEY = '__sync_file__:password'
@@ -175,8 +178,13 @@ export class MobileFileSync {
   // ---------------------------------------------------------------------------
 
   private async read(uri: string): Promise<string | undefined> {
-    const { data } = await Native.readUri({ uri })
+    const data = isSmbPath(uri) ? await smbReadFile(uri) : (await Native.readUri({ uri })).data
     return data && data.trim() ? data : undefined
+  }
+
+  private async write(uri: string, data: string): Promise<void> {
+    if (isSmbPath(uri)) await smbWriteFile(uri, data)
+    else await Native.writeUri({ uri, data })
   }
 
   private async rememberPassword(remember: boolean): Promise<void> {
@@ -251,7 +259,7 @@ export class MobileFileSync {
       } finally {
         this.applying = false
       }
-      if (res.write !== undefined) await Native.writeUri({ uri: s.path, data: res.write })
+      if (res.write !== undefined) await this.write(s.path, res.write)
       this.lastText = res.text
       if (rekey) {
         this.password = rekey.password

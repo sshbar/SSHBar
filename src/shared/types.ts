@@ -107,6 +107,32 @@ export interface FileSyncSettings {
   lastError: string
 }
 
+/** Login for an SMB share (Android reaches a NAS directly). An empty password means "use the saved one". */
+export interface SmbLogin {
+  host: string
+  port: number
+  share: string
+  username: string
+  password: string
+}
+
+export interface SmbEntry {
+  name: string
+  dir: boolean
+  size: number
+  modified: number
+}
+
+/** The NAS login used last on this device (the password itself never leaves native storage). */
+export interface SmbSaved {
+  host: string
+  port: number
+  share: string
+  username: string
+  dir: string
+  hasPassword: boolean
+}
+
 export interface FileSyncStatus extends FileSyncSettings {
   /** Enabled, but the master password is not known in this session */
   locked: boolean

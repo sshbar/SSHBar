@@ -6,6 +6,8 @@ import { Native, b64ToBytes } from './native'
 import { MobileHosts, MobileKnownHosts, MobileSettings, MobileSnippets } from './stores'
 import { MobileSession, type PromptInput } from './session'
 import { MobileFileSync } from './fileSync'
+import { smbChoose, smbList, smbSaved } from './smb'
+import { isSmbPath, parseSmbPath, smbLabel } from '../shared/smbPath'
 
 const notOnAndroid = (what: string) => (): Promise<never> => Promise.reject(new Error(`${what} is not available on Android yet`))
 
@@ -167,7 +169,19 @@ export async function createMobileApi(): Promise<SSHbarApi> {
         picked.set(r.uri, r.name)
         return r.uri
       },
-      describePath: (path) => picked.get(path) || (path === settings.get().fileSync.path && settings.get().fileSync.pathLabel) || path,
+      describePath: (path) =>
+        picked.get(path) ||
+        (path === settings.get().fileSync.path && settings.get().fileSync.pathLabel) ||
+        (isSmbPath(path) ? smbLabel(parseSmbPath(path)) : path),
+      smb: {
+        saved: () => smbSaved(),
+        list: (login, dir) => smbList(login, dir),
+        choose: async (login, filePath) => {
+          const path = await smbChoose(login, filePath)
+          picked.set(path, smbLabel(parseSmbPath(path)))
+          return path
+        }
+      },
       enable: (opts) => fileSync.enable({ ...opts, label: picked.get(opts.path) ?? 'sync file' }),
       unlock: (password, remember) => fileSync.unlock(password, remember),
       disable: () => fileSync.disable(),

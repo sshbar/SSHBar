@@ -391,6 +391,73 @@ public class SshBridgePlugin extends Plugin {
         });
     }
 
+    // ------------------------------------------------------------------ SMB (NAS) files
+
+    private static SmbFiles.Target smbTarget(PluginCall call) {
+        SmbFiles.Target t = new SmbFiles.Target();
+        t.host = call.getString("host", "");
+        t.port = call.getInt("port", 445);
+        t.share = call.getString("share", "");
+        t.username = call.getString("username", "");
+        t.password = call.getString("password", "");
+        return t;
+    }
+
+    @PluginMethod
+    public void smbList(PluginCall call) {
+        final SmbFiles.Target t = smbTarget(call);
+        final String path = call.getString("path", "");
+        pool.execute(() -> {
+            try {
+                JSArray entries = new JSArray();
+                for (SmbFiles.Entry e : SmbFiles.list(t, path)) {
+                    JSObject o = new JSObject();
+                    o.put("name", e.name);
+                    o.put("dir", e.dir);
+                    o.put("size", e.size);
+                    o.put("modified", e.modified);
+                    entries.put(o);
+                }
+                JSObject r = new JSObject();
+                r.put("entries", entries);
+                call.resolve(r);
+            } catch (Exception e) {
+                call.reject(e.getMessage());
+            }
+        });
+    }
+
+    @PluginMethod
+    public void smbRead(PluginCall call) {
+        final SmbFiles.Target t = smbTarget(call);
+        final String path = call.getString("path", "");
+        pool.execute(() -> {
+            try {
+                byte[] data = SmbFiles.read(t, path);
+                JSObject r = new JSObject();
+                r.put("data", data == null ? null : new String(data, StandardCharsets.UTF_8));
+                call.resolve(r);
+            } catch (Exception e) {
+                call.reject(e.getMessage());
+            }
+        });
+    }
+
+    @PluginMethod
+    public void smbWrite(PluginCall call) {
+        final SmbFiles.Target t = smbTarget(call);
+        final String path = call.getString("path", "");
+        final byte[] data = call.getString("data", "").getBytes(StandardCharsets.UTF_8);
+        pool.execute(() -> {
+            try {
+                SmbFiles.write(t, path, data);
+                call.resolve();
+            } catch (Exception e) {
+                call.reject(e.getMessage());
+            }
+        });
+    }
+
     /** scrypt (RFC 7914) for the sync file's master password; too heavy for the WebView. */
     @PluginMethod
     public void scrypt(PluginCall call) {

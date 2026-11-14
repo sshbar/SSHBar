@@ -1,6 +1,9 @@
 import type {
   DirListing,
   FileSyncStatus,
+  SmbEntry,
+  SmbLogin,
+  SmbSaved,
   ForwardState,
   PortForward,
   Host,
@@ -88,6 +91,13 @@ export interface SSHbarApi {
     setSharePassSecrets(share: boolean): Promise<SyncResult>
     /** human-readable name for a sync file path (Android: picker display name for content:// URIs) */
     describePath?(path: string): string
+    /** Android: the sync file on an SMB share (NAS), reached without a separate app */
+    smb?: {
+      saved(): Promise<SmbSaved | null>
+      list(login: SmbLogin, dir: string): Promise<SmbEntry[]>
+      /** saves the login on this device and returns the sync path for the file */
+      choose(login: SmbLogin, filePath: string): Promise<string>
+    }
     onStatus(cb: (s: FileSyncStatus) => void): Unsubscribe
   }
 

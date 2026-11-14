@@ -1552,3 +1552,21 @@ kbd {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* NAS (SMB) browser on Android */
+.smb-list {
+  max-height: min(52vh, 420px);
+}
+.smb-list .pp-item {
+  min-height: 42px;
+}
+.smb-list .pp-item:disabled {
+  cursor: default;
+}
+.smb-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

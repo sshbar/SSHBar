@@ -155,7 +155,7 @@ The renderer runs sandboxed with `contextIsolation` and has no Node access. Save
 - Live CPU/RAM/network stats need a Linux server. macOS/BSD hosts show disk usage only.
 - Only run-tested on Linux. The Windows installer and portable `.exe` are built and contain the app's icon and version info, but they haven't been run on Windows yet. macOS builds are configured but unverified.
 - Proton Pass sync was tested against a simulated CLI. Its write commands (`item create note`, `item update --field`) come from `pass-cli --help` but haven't been run against a real vault yet.
-- Android doesn't have the file manager, port forwarding or imports yet. No split panes or broadcast-to-many-sessions.
+- Android doesn't have the file manager, port forwarding or imports yet. Its NAS option needs SMB 2 or newer and a username for SMB 2-only servers. No split panes or broadcast-to-many-sessions.
 
 ## Releases
 
@@ -171,12 +171,16 @@ The APK is signed with the project's release key, supplied as repository secrets
 
 ## Android app
 
-The phone app shares the desktop's screens and its host model, with SSH done natively by [sshj](https://github.com/hierynomus/sshj). It has terminal, live stats, jump hosts, password, key and 2FA logins, snippets, and the encrypted sync file through Android's file picker. To get your desktop hosts on the phone:
+The phone app shares the desktop's screens and its host model, with SSH done natively by [sshj](https://github.com/hierynomus/sshj). It has terminal, live stats, jump hosts, password, key and 2FA logins, snippets, and the encrypted sync file, either on a NAS share it opens itself (SMB 2/3 through [smbj](https://github.com/hierynomus/smbj)) or through Android's file picker. To get your desktop hosts on the phone:
 
 1. On the computer: **Settings → Encrypted sync file**. Hosts that use Proton Pass keys or passwords need **Share Proton Pass keys and passwords with my phones** turned on, because phones have no Proton Pass CLI.
-2. On the phone: **Settings → Encrypted sync file → Use existing sync file…** Pick the same file (Drive, Dropbox, OneDrive, Proton Drive and Syncthing folders appear in the picker) and enter the master password.
+2. On the phone: **Settings → Encrypted sync file**, then
+   - file on a NAS or Windows share: **On a NAS (SMB)…** Enter the NAS address, share, username and password (or paste a path like `\\192.168.0.10\share\folder`), tap through to the file and enter the master password. SMB 3 connections are encrypted.
+   - file in a cloud drive: **Use existing sync file…** and tap ☰ in the picker to see Drive, Dropbox, OneDrive and Proton Drive. An app that is missing there may have been switched off by Android for not being used: turn it back on in the phone's **Settings → Apps**.
 
-Passwords and keys saved on the phone are encrypted with the Android Keystore. They never change the host settings shared with your computers.
+Passwords and keys saved on the phone, including the NAS password, are encrypted with the Android Keystore. They never change the host settings shared with your computers.
+
+Debug builds install as a separate app ("SSHbar dev", `com.nicuorlov.sshbar.dev`) next to the released one. `scripts/smb-server.sh` starts a disposable Samba server for testing the NAS option (`adb reverse tcp:4450 tcp:4450`, then address `127.0.0.1:4450`).
 
 Building from source:
 

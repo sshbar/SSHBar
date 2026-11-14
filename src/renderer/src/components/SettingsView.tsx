@@ -89,7 +89,7 @@ export function SettingsView() {
         title="Encrypted sync file"
         desc={
           api.platform === 'android'
-            ? 'Open the sync file your computer uses — from Google Drive, Dropbox, OneDrive, Proton Drive or a Syncthing folder — to get the same hosts here. Everything in it stays encrypted with your master password.'
+            ? 'Open the sync file your computer uses — on your NAS, or in Google Drive, Dropbox, OneDrive, Proton Drive or a Syncthing folder — to get the same hosts here. Everything in it stays encrypted with your master password.'
             : 'The simplest way to share hosts between your computers without a server: one encrypted file in a folder you already sync. Each device works offline and merges changes when the file updates.'
         }
       >
