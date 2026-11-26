@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 import { StatsParser, computeStats, parseSample, statsCommand } from '../src/main/ssh/stats'
 
@@ -76,5 +77,25 @@ describe('stats parsing', () => {
     const inner = cmd.slice("exec sh -c '".length, -1)
     expect(inner.includes("'")).toBe(false)
     expect(cmd).toContain('d=5')
+  })
+
+  it('is a single line, so htop and ps on the server show it cleanly', () => {
+    expect(statsCommand(3)).not.toMatch(/[\r\n]/)
+  })
+
+  it('runs in a real sh and prints every section', () => {
+    // the script itself, without the "exec" (which would replace the test's shell) and with a
+    // fast exit after the first sample
+    const inner = statsCommand(1).slice("exec sh -c '".length, -1).replace('sleep $d || exit 0;', 'exit 0;')
+    const r = spawnSync('sh', ['-c', inner], { encoding: 'utf8', timeout: 10_000 })
+    if (r.error) return // no sh on this machine (plain Windows without Git Bash)
+    expect(r.status).toBe(0)
+    expect(r.stderr).not.toMatch(/syntax|unexpected/i)
+    for (const section of ['@@info', '@@disk', '@@end']) expect(r.stdout).toContain(section)
+    // a real Linux /proc (Git Bash on Windows has only part of one)
+    if (process.platform === 'linux') {
+      expect(r.stderr).toBe('')
+      for (const section of ['@@stat', '@@mem', '@@net', '@@load', '@@uptime']) expect(r.stdout).toContain(section)
+    }
   })
 })

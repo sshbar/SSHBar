@@ -9,27 +9,29 @@ import type { DiskStat, HostStats } from '../../shared/types'
 export function statsCommand(intervalSec: number): string {
   const n = Math.max(1, Math.min(60, Math.round(intervalSec)))
   // Must not contain single quotes: it is wrapped in sh -c '...' so it works from bash, zsh and fish.
+  // One line, every statement ending in its own ";" (none after "do"/"then"): the server shows this
+  // command in htop and ps, where line breaks came out as boxes ("echo @@info�uname -srm…").
   const script = [
-    'echo @@info',
-    'uname -srm 2>/dev/null',
-    'hostname 2>/dev/null || uname -n',
-    'grep PRETTY_NAME /etc/os-release 2>/dev/null',
-    'd=1',
+    'echo @@info;',
+    'uname -srm 2>/dev/null;',
+    'hostname 2>/dev/null || uname -n;',
+    'grep PRETTY_NAME /etc/os-release 2>/dev/null;',
+    'd=1;',
     'while :; do',
-    '  if [ -r /proc/stat ]; then',
-    '    echo @@stat; grep "^cpu" /proc/stat',
-    '    echo @@mem; cat /proc/meminfo',
-    '    echo @@net; cat /proc/net/dev',
-    '    echo @@load; cat /proc/loadavg',
-    '    echo @@uptime; cat /proc/uptime',
-    '  fi',
-    '  echo @@disk; df -Pk 2>/dev/null',
-    '  echo @@end',
+    'if [ -r /proc/stat ]; then',
+    'echo @@stat; grep "^cpu" /proc/stat;',
+    'echo @@mem; cat /proc/meminfo;',
+    'echo @@net; cat /proc/net/dev;',
+    'echo @@load; cat /proc/loadavg;',
+    'echo @@uptime; cat /proc/uptime;',
+    'fi;',
+    'echo @@disk; df -Pk 2>/dev/null;',
+    'echo @@end;',
     // first interval is short so CPU % and network rates appear quickly
-    '  sleep $d || exit 0',
-    `  d=${n}`,
+    'sleep $d || exit 0;',
+    `d=${n};`,
     'done'
-  ].join('\n')
+  ].join(' ')
   return `exec sh -c '${script}'`
 }
 
