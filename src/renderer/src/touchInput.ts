@@ -100,6 +100,9 @@ export function enableSoftKeyboardInput(container: HTMLElement, send: (d: string
   let sent = ''
   // after restartSoftKeyboard: the word being composed was abandoned, ignore its last events
   let stale = false
+  // A real key is down (hardware keyboard, `adb shell input`): xterm.js types it itself. Handling the
+  // input event it also causes would type it a second time (that is how spaces got doubled).
+  let realKey = false
   const textarea = (): HTMLTextAreaElement | null => container.querySelector('.xterm-helper-textarea')
 
   const sync = (text: string): void => {
@@ -120,7 +123,11 @@ export function enableSoftKeyboardInput(container: HTMLElement, send: (d: string
   }
 
   const onKeyDown = (e: KeyboardEvent): void => {
-    if (e.keyCode === 229) e.stopPropagation() // IME placeholder key: the real text arrives as input events
+    realKey = e.keyCode !== 229
+    if (!realKey) e.stopPropagation() // IME placeholder key: the real text arrives as input events
+  }
+  const onKeyUp = (): void => {
+    realKey = false
   }
   const onCompositionStart = (e: CompositionEvent): void => {
     e.stopPropagation()
@@ -143,9 +150,12 @@ export function enableSoftKeyboardInput(container: HTMLElement, send: (d: string
     sent = ''
     resetSoon()
   }
-  const onBeforeInput = (e: Event): void => e.stopPropagation()
+  const onBeforeInput = (e: Event): void => {
+    if (!realKey) e.stopPropagation()
+  }
   const onInput = (e: Event): void => {
     const ev = e as InputEvent
+    if (realKey && !composing) return // xterm.js already typed this key
     e.stopPropagation()
     if (composing || stale || ev.inputType === 'insertCompositionText') return
     if (ev.inputType === 'insertText' && ev.data) send(ev.data)
@@ -165,6 +175,7 @@ export function enableSoftKeyboardInput(container: HTMLElement, send: (d: string
   const listeners: [string, EventListener][] = [
     [IME_RESET, onReset],
     ['keydown', onKeyDown as EventListener],
+    ['keyup', onKeyUp],
     ['compositionstart', onCompositionStart as EventListener],
     ['compositionupdate', onCompositionUpdate as EventListener],
     ['compositionend', onCompositionEnd as EventListener],

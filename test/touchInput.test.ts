@@ -87,6 +87,21 @@ describe('soft keyboard input', () => {
     expect(h.sent).not.toContain('\x7f')
   })
 
+  it('does not type a real key press twice (hardware keyboard, adb input: spaces were doubled)', () => {
+    const h = harness()
+    for (const [code, key] of [[83, 's'], [32, ' '], [65, 'a']] as const) {
+      h.fire({ type: 'keydown', code, key })
+      h.fire({ type: 'input', inputType: 'insertText', data: key })
+      h.fire({ type: 'keyup', code, key })
+    }
+    // xterm.js types real keys from its own key handlers: nothing may be sent from here
+    expect(h.sent).toEqual([])
+    expect(h.reachedXterm.filter((t) => t === 'input')).toHaveLength(3)
+    // text that arrives with no key press at all (voice typing, a suggestion bar) is still sent
+    h.fire({ type: 'input', inputType: 'insertText', data: 'ok' })
+    expect(h.sent).toEqual(['ok'])
+  })
+
   it('leaves real key presses (hardware keyboards, keyCode != 229) to xterm.js', () => {
     const h = harness()
     h.fire({ type: 'keydown', code: 13, key: 'Enter' })
