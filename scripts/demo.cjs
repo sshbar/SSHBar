@@ -1,5 +1,6 @@
 // README screenshots and animations, made by driving the real app against the demo servers.
 //   scripts/demo-servers.sh          (Docker: "bastion" on 127.0.0.1:22 and "app-1" behind it)
+//   scripts/demo-linux.sh            (the same, run as the Linux app in Docker: what the README shows)
 //   npm run demo                     (writes docs/media/*.png and *.gif; the GIFs need ffmpeg)
 //   scripts/demo-servers.sh stop
 //
@@ -7,7 +8,7 @@
 // is a demo home folder. Your own hosts, keys, ~/.ssh and files never appear. bastion.example.com is
 // resolved to the local demo container inside this process only.
 const { app } = require('electron')
-const { execFileSync, spawn } = require('node:child_process')
+const { execFileSync } = require('node:child_process')
 const dns = require('node:dns')
 const fs = require('node:fs')
 const path = require('node:path')
@@ -16,7 +17,12 @@ const ROOT = path.join(__dirname, '..')
 const OUT = process.env.DEMO_OUT || path.join(ROOT, 'docs', 'media')
 const KEY = process.env.DEMO_KEY || path.join(ROOT, 'test', '.data', 'demo', 'id_demo')
 const WORK = path.join(ROOT, 'test', '.data', 'demo', 'run')
-const HOME = path.join(WORK, 'home') // shown as "This computer" in the file manager
+// shown as "This computer" in the file manager; DEMO_HOME is set by demo-linux.sh (a container's
+// /home/alex). Its contents are replaced, so it must never be a real home folder.
+const HOME = process.env.DEMO_HOME || path.join(WORK, 'home')
+// where the bastion really is: the container published on this computer, or as seen from Docker
+const BASTION_ADDR = process.env.DEMO_BASTION_ADDR || '127.0.0.1'
+const BASTION_PORT = Number(process.env.SSHBAR_DEMO_PORT || 22)
 const DATA = path.join(WORK, 'data')
 const W = 1280
 const H = 800
@@ -28,6 +34,13 @@ if (!fs.existsSync(KEY)) {
 
 // ----- demo world ----------------------------------------------------------------------------------
 fs.rmSync(WORK, { recursive: true, force: true })
+// only ever empty a folder an earlier demo run made (it leaves this marker), never someone's home
+const MARKER = path.join(HOME, '.sshbar-demo-home')
+if (fs.existsSync(HOME) && !fs.existsSync(MARKER) && fs.readdirSync(HOME).length) {
+  console.error(`[demo] ${HOME} exists and was not made by the demo: refusing to empty it`)
+  process.exit(1)
+}
+fs.rmSync(HOME, { recursive: true, force: true })
 fs.mkdirSync(path.join(HOME, 'shop-release', 'img'), { recursive: true })
 fs.mkdirSync(DATA, { recursive: true })
 fs.mkdirSync(OUT, { recursive: true })
@@ -40,6 +53,7 @@ fs.writeFileSync(path.join(HOME, 'release-notes.md'), '# Shop 2.4\n\n- faster ch
 fs.mkdirSync(path.join(HOME, 'Documents'))
 fs.mkdirSync(path.join(HOME, 'Downloads'))
 fs.mkdirSync(path.join(HOME, '.ssh'))
+fs.writeFileSync(MARKER, 'made by scripts/demo.cjs: emptied on every run\n')
 
 const now = Date.now()
 const auth = (o) => ({
@@ -60,7 +74,7 @@ const fwd = (id, type, label, bindPort, destHost = '', destPort = 0) => ({ id, t
 fs.writeFileSync(path.join(DATA, 'hosts.json'), JSON.stringify({
   version: 1, deleted: {},
   hosts: [
-    host('h-bastion', 'bastion', 'Staging', { hostname: 'bastion.example.com', tags: ['jump'] }),
+    host('h-bastion', 'bastion', 'Staging', { hostname: 'bastion.example.com', port: BASTION_PORT, tags: ['jump'] }),
     host('h-app', 'app-1', 'Staging', {
       hostname: 'app-1', port: 2222, jumpHostId: 'h-bastion', tags: ['docker'],
       forwards: [
@@ -99,11 +113,7 @@ process.env.USERPROFILE = HOME // os.homedir() on Windows
 const realLookup = dns.lookup
 dns.lookup = function (hostname, options, cb) {
   if (typeof options === 'function') [cb, options] = [options, {}]
-  if (hostname === 'bastion.example.com') {
-    const all = typeof options === 'object' && options?.all
-    return process.nextTick(() => (all ? cb(null, [{ address: '127.0.0.1', family: 4 }]) : cb(null, '127.0.0.1', 4)))
-  }
-  return realLookup.call(this, hostname, options, cb)
+  return realLookup.call(this, hostname === 'bastion.example.com' ? BASTION_ADDR : hostname, options, cb)
 }
 
 // ----- helpers -------------------------------------------------------------------------------------
@@ -233,35 +243,23 @@ async function run(win) {
       await sleep(1800)
     })
 
-    // 3. hero: htop in a live session, the stats bar graphing real work on the server (compressing
-    // the database backup over and over, with pauses, so the CPU graph has some shape)
-    let loadOn = true
-    const gzip = () => {
-      if (!loadOn) return
-      spawn('docker', ['exec', '-u', 'deploy', 'sshbar-demo-app', 'gzip', '-9c', '/config/backups/db-2026-11-25.sql.gz'], { stdio: 'ignore' })
-        .on('exit', () => setTimeout(gzip, 600 + Math.random() * 1200))
-    }
-    gzip()
-    let hasHtop = true
-    try {
-      execFileSync('docker', ['exec', 'sshbar-demo-app', 'which', 'htop'], { stdio: 'ignore' })
-    } catch {
-      hasHtop = false
-    }
+    // 3. hero: htop in a live session, the stats bar graphing real work on the server: compressing
+    // the database backup over and over, with pauses, so the CPU graph has some shape. Started from
+    // this terminal (no docker CLI needed), which also removes what an earlier run uploaded.
+    await typeText('rm -rf ~/shop-release; (for i in $(seq 1 40); do gzip -9c ~/backups/db-2026-11-25.sql.gz > /dev/null; sleep 1; done > /dev/null 2>&1 &)\r', 80)
+    await sleep(500)
     await key('L', ['control'])
-    await typeText(hasHtop ? 'htop\r' : 'ls -lh && tail -n 6 logs/access.log\r', 40)
+    await typeText('htop\r', 40)
     await sleep(20000) // a minute's worth of graph would be nicer, 20 s gives it some shape
-    // take it while the compression is on screen, not in one of its pauses
-    if (hasHtop) {
-      await waitFor(`/gzip -9c/.test(${visibleSession}?.querySelector('.xterm-rows')?.textContent || '')`, 20000).catch(() => {})
-      await sleep(1300) // htop refreshes every 1.5 s: let the CPU bars catch up
-    }
+    // take it while htop shows the compression working (≥ 25 % CPU), not in one of its pauses
+    const gzipBusy = `[...(${visibleSession}?.querySelectorAll('.xterm-rows > div') || [])].some(r => {
+      const m = /\\s(\\d+\\.\\d)\\s+\\d+\\.\\d\\s+\\d+:\\d+\\.\\d+\\s+gzip -9c/.exec(r.textContent)
+      return m && Number(m[1]) >= 25
+    })`
+    await waitFor(gzipBusy, 30000).catch(() => log('gzip never showed up busy in htop: taking the shot anyway'))
     await shot('hero')
-    loadOn = false
-    if (hasHtop) {
-      await typeText('q', 40)
-      await sleep(400)
-    }
+    await typeText('q', 40)
+    await sleep(400)
 
     // 4. snippet suggestions while typing
     await key('L', ['control'])
@@ -271,6 +269,8 @@ async function run(win) {
       async () => {
         await sleep(600)
         await typeText('sudo apt up', 7)
+        // without the list, the arrows below would walk the shell history and Enter would run it
+        await waitFor(`document.querySelectorAll('.suggest-item').length >= 2`, 5000)
         await sleep(1400)
         await key('Down')
         await sleep(700)
@@ -286,8 +286,7 @@ async function run(win) {
     await key('C', ['control'])
     await sleep(300)
 
-    // 5. file manager: upload a folder, recorded (the servers outlive a run: remove the last upload)
-    execFileSync('docker', ['exec', 'sshbar-demo-app', 'rm', '-rf', '/config/shop-release'])
+    // 5. file manager: upload a folder, recorded
     await sessionTab('Files')
     await waitFor(`document.querySelectorAll('.file-pane')[1]?.querySelector('.fp-row:not(.fp-header)')`)
     await sleep(900)

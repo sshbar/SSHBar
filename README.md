@@ -50,7 +50,7 @@ At startup SSHbar asks GitHub for the latest release and shows a notice with a d
 
 <p align="center"><img src="docs/media/file-transfer.gif" alt="Selecting the shop-release folder on this computer and uploading it to the server, with a progress bar"></p>
 
-The screenshots are made by `npm run demo` against throwaway demo servers in Docker, with made-up hosts and files ([`scripts/demo.cjs`](scripts/demo.cjs)).
+The screenshots are of the Linux app, made by [`scripts/demo-linux.sh`](scripts/demo-linux.sh) against throwaway demo servers in Docker, with made-up hosts and files.
 
 ## Building from source
 
@@ -152,11 +152,14 @@ On Windows, Hyper-V may reserve port 2222: start the servers on another one, e.g
 
 ```bash
 scripts/demo-servers.sh        # Docker: "bastion" on 127.0.0.1:22 (SSHBAR_DEMO_PORT to change) and "app-1" behind it
-npm run demo                   # drives the real app and writes docs/media/*.png and *.gif (GIFs need ffmpeg)
+scripts/demo-linux.sh          # the Linux app in Docker, on a virtual display: writes docs/media/*.png and *.gif
+node scripts/demo-android.mjs  # docs/media/android.png from a debug build on an emulator or phone (adb + ffmpeg)
 scripts/demo-servers.sh stop
 ```
 
-Everything shown is demo data: a fresh data folder with made-up hosts and snippets, and a demo folder standing in for "this computer", so your own hosts, keys and files never appear. `bastion.example.com` is pointed at the local container inside the demo process only. Opens a window on Windows and macOS for about a minute; on Linux add `--ozone-platform=headless`.
+`demo-linux.sh` builds its runner image once (about 600 MB of downloads: Node, Electron for Linux, its libraries, ffmpeg and fonts) and works the same from Linux, macOS or Windows. `npm run demo` runs the same script on this computer instead, in a window, for about a minute (needs ffmpeg for the GIFs).
+
+Everything shown is demo data: a fresh data folder with made-up hosts and snippets, and a demo folder standing in for "this computer", so your own hosts, keys and files never appear. `bastion.example.com` is pointed at the demo container inside the demo process only.
 
 The integration suite covers port forwarding (local, remote and SOCKS5 with server-side name resolution, auto-start, port-in-use errors), jump hosts (to a server that is only reachable through the bastion), password, retry and cancel, plain and encrypted keys, keys from Proton Pass, key-to-password fallback, host-key change detection, connection-refused errors, live stats, and SFTP folder upload/download round-trips with byte-level comparison and cancellation. Host sync runs against a fake `pass-cli` (`test/fixtures/fake-pass-cli.mjs`) that simulates two devices.
 
