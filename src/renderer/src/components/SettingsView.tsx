@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CircleCheck, CircleX, Download, LoaderCircle, Play, RefreshCw, Square, Trash, Upload } from 'lucide-react'
 import type { KnownHostEntry, PPAgentStatus, PPStatus, PPVault, SecretBackendInfo, Settings } from '../../../shared/types'
+import { RELEASES_PAGE, type UpdateInfo } from '../../../shared/updateCheck'
 import { api } from '../api'
 import { useStore } from '../store'
 import { dateTime, errorText } from '../format'
@@ -33,6 +34,7 @@ export function SettingsView() {
   const [info, setInfo] = useState<{ version: string; electron: string } | null>(null)
   const [known, setKnown] = useState<KnownHostEntry[]>([])
   const [cliPath, setCliPath] = useState(settings?.protonPassCli ?? 'pass-cli')
+  const [updateCheck, setUpdateCheck] = useState<{ busy: boolean; info?: UpdateInfo; error?: string }>({ busy: false })
 
   const checkPP = async (): Promise<void> => {
     setPpLoading(true)
@@ -66,6 +68,15 @@ export function SettingsView() {
       toast('error', errorText(e))
     } finally {
       setAgentBusy(false)
+    }
+  }
+
+  const checkUpdatesNow = async (): Promise<void> => {
+    setUpdateCheck({ busy: true })
+    try {
+      setUpdateCheck({ busy: false, info: await api.updates.check() })
+    } catch (e) {
+      setUpdateCheck({ busy: false, error: errorText(e) })
     }
   }
 
@@ -366,7 +377,50 @@ export function SettingsView() {
             </div>
           </div>
         </div>
+        <label className="check">
+          <input type="checkbox" checked={s.checkForUpdates} onChange={(e) => void update({ checkForUpdates: e.target.checked })} />
+          Check for a new version when SSHbar starts
+        </label>
+        <p className="muted small">Asks GitHub which release is the latest, like opening the releases page would. Nothing about your hosts or settings is sent.</p>
+        <div className="row gap wrap">
+          <button className="btn" disabled={updateCheck.busy} onClick={() => void checkUpdatesNow()}>
+            {updateCheck.busy ? <LoaderCircle size={14} className="spin" /> : <RefreshCw size={14} />} Check now
+          </button>
+          <UpdateResult {...updateCheck} />
+        </div>
       </Section>
     </div>
+  )
+}
+
+function UpdateResult({ info, error }: { info?: UpdateInfo; error?: string }) {
+  const link = (url: string, text: string): React.ReactNode => (
+    <a href="#" onClick={(e) => (e.preventDefault(), void api.openExternal(url))}>
+      {text}
+    </a>
+  )
+  if (error)
+    return (
+      <span className="status-line">
+        <CircleX size={15} className="warn-text" /> Couldn’t check: {error}. {link(RELEASES_PAGE, 'Open the releases page')}
+      </span>
+    )
+  if (!info) return null
+  if (info.available)
+    return (
+      <span className="status-line">
+        <Download size={15} className="ok-text" /> SSHbar {info.latest} is available. {link(info.url, 'Download')}
+      </span>
+    )
+  if (info.dev)
+    return (
+      <span className="status-line muted">
+        Development build: the latest release is {info.latest}. {link(info.url, 'Releases')}
+      </span>
+    )
+  return (
+    <span className="status-line">
+      <CircleCheck size={15} className="ok-text" /> You have the latest version ({info.current}).
+    </span>
   )
 }

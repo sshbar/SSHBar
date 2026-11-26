@@ -804,6 +804,19 @@ p {
 .toast-success > svg {
   color: var(--accent);
 }
+.toast-update {
+  border-color: #3ddc9766;
+}
+.toast-update > svg {
+  color: var(--accent);
+}
+.update-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 1px;
+}
 
 /* ---------- session ---------- */
 .session {

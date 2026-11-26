@@ -33,6 +33,8 @@ export const DEFAULT_SETTINGS: Settings = {
   terminalScrollback: 10000,
   terminalCursorStyle: 'block',
   statsIntervalSec: 3,
+  checkForUpdates: true,
+  skippedUpdate: '',
   sync: {
     enabled: false,
     shareId: '',

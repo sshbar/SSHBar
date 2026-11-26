@@ -16,6 +16,8 @@ A cross-platform SSH client for Linux and Windows: terminal, file manager, port 
 
 The Windows builds aren't code-signed yet, so SmartScreen may warn: choose *More info → Run anyway*.
 
+At startup SSHbar asks GitHub for the latest release and shows a notice with a download link when there is a newer one. It never downloads or installs anything by itself. Turn the check off, or run it by hand, under *Settings → About*.
+
 ## Features
 
 | | |

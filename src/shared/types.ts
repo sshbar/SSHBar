@@ -89,6 +89,10 @@ export interface Settings {
   terminalScrollback: number
   terminalCursorStyle: 'block' | 'bar' | 'underline'
   statsIntervalSec: number
+  /** look for a newer release on GitHub when the app starts */
+  checkForUpdates: boolean
+  /** release the user chose to skip: no startup notice for it (a later one still shows) */
+  skippedUpdate: string
   sync: SyncSettings
   fileSync: FileSyncSettings
 }

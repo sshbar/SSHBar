@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { FileSyncStatus, ForwardState, Host, HostInput, HostStats, PromptRequest, SessionStatus, Settings, Snippet, TransferInfo } from '../../shared/types'
+import type { UpdateInfo } from '../../shared/updateCheck'
 import { api } from './api'
 import { disposeTerminal, pushTerminalData } from './terminalBus'
 import { errorText } from './format'
@@ -44,6 +45,8 @@ interface State {
   snippets: Snippet[]
   /** session whose snippet palette is open */
   palette: string | null
+  /** newer release found by the startup check, until dismissed */
+  updateNotice: UpdateInfo | null
 
   init(): Promise<void>
   openPalette(sessionId: string | null): void
@@ -58,11 +61,15 @@ interface State {
   toast(kind: Toast['kind'], text: string): void
   dismissToast(id: number): void
   resolvePrompt(id: string): void
+  /** hide the update notice; `skip` also stops it from coming back for this version */
+  dismissUpdate(skip: boolean): void
 }
 
 const HISTORY = 60
 let toastSeq = 1
 let initOnce: Promise<void> | null = null
+/** let startup (and a first connection) finish before talking to GitHub */
+const UPDATE_CHECK_DELAY_MS = 5000
 
 export const useStore = create<State>((set, get) => ({
   ready: false,
@@ -78,6 +85,7 @@ export const useStore = create<State>((set, get) => ({
   fileSync: null,
   snippets: [],
   palette: null,
+  updateNotice: null,
 
   openPalette(sessionId) {
     set({ palette: sessionId })
@@ -90,8 +98,16 @@ export const useStore = create<State>((set, get) => ({
       const [hosts, settings, fileSync, snippets] = await Promise.all([api.hosts.list(), api.settings.get(), api.fileSync.status(), api.snippets.list()])
       set({ hosts, settings, fileSync, snippets, ready: true })
       subscribe()
+      setTimeout(() => void checkForUpdatesAtStartup(), UPDATE_CHECK_DELAY_MS)
     })()
     return initOnce
+
+    async function checkForUpdatesAtStartup(): Promise<void> {
+      if (!get().settings?.checkForUpdates) return
+      // offline, firewalled or rate-limited: say nothing, the next start tries again
+      const info = await api.updates.check().catch(() => null)
+      if (info?.available && info.latest !== get().settings?.skippedUpdate) set({ updateNotice: info })
+    }
 
     function subscribe(): void {
 
@@ -235,5 +251,11 @@ export const useStore = create<State>((set, get) => ({
 
   resolvePrompt(id) {
     set({ prompts: get().prompts.filter((p) => p.id !== id) })
+  },
+
+  dismissUpdate(skip) {
+    const notice = get().updateNotice
+    set({ updateNotice: null })
+    if (skip && notice) void get().updateSettings({ skippedUpdate: notice.latest })
   }
 }))

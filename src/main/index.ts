@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, safeStorage, shell, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, safeStorage, shell, type IpcMainInvokeEvent } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { copyFileSync, existsSync, mkdirSync, promises as fs } from 'node:fs'
 import { homedir } from 'node:os'
@@ -28,6 +28,7 @@ import { syncHosts } from './sync'
 import { FileSync } from './fileSync'
 import { passRef, type PassSecret } from '../shared/vaultSync'
 import { SnippetStore } from './store/snippets'
+import { checkForUpdate } from '../shared/updateCheck'
 import { convertTermix, isTermixExport } from './importers/termix'
 
 // ---------------------------------------------------------------------------
@@ -555,6 +556,8 @@ function registerIpc(): void {
   handle('clipboard:read', () => clipboard.readText())
   handle('clipboard:write', (text: string) => clipboard.writeText(str(text)))
   handle('app:info', () => ({ version: app.getVersion(), electron: process.versions.electron, platform: process.platform }))
+  // net.fetch goes through Chromium's network stack, so system proxy settings apply
+  handle('updates:check', () => checkForUpdate(app.getVersion(), (url, init) => net.fetch(url, init), { dev: !app.isPackaged }))
   handle('shell:openExternal', async (url: string) => {
     if (/^(https?:\/\/|mailto:)/i.test(str(url))) await shell.openExternal(url)
   })

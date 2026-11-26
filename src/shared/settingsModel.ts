@@ -21,6 +21,8 @@ export function sanitizeSettings(raw: Partial<Settings>): Settings {
       ? (raw.terminalCursorStyle as Settings['terminalCursorStyle'])
       : d.terminalCursorStyle,
     statsIntervalSec: clampInt(raw.statsIntervalSec, 1, 60, d.statsIntervalSec),
+    checkForUpdates: raw.checkForUpdates !== false,
+    skippedUpdate: typeof raw.skippedUpdate === 'string' ? raw.skippedUpdate.slice(0, 64) : '',
     sync: {
       enabled: Boolean(sync.enabled),
       shareId: String(sync.shareId ?? ''),

@@ -122,6 +122,10 @@ const api: SSHbarApi = {
     write: (text) => invoke('clipboard:write', text)
   },
 
+  updates: {
+    check: () => invoke('updates:check')
+  },
+
   pathForFile: (file) => webUtils.getPathForFile(file),
   openExternal: (url) => invoke('shell:openExternal', url),
   appInfo: () => invoke('app:info')

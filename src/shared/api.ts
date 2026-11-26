@@ -26,6 +26,7 @@ import type {
   SyncResult,
   TransferInfo
 } from './types'
+import type { UpdateInfo } from './updateCheck'
 
 export type Unsubscribe = () => void
 
@@ -148,6 +149,11 @@ export interface SSHbarApi {
   clipboard: {
     read(): Promise<string>
     write(text: string): Promise<void>
+  }
+
+  updates: {
+    /** Ask GitHub for the newest release. Rejects when offline or rate-limited. */
+    check(): Promise<UpdateInfo>
   }
 
   /** Resolve the absolute path of a File dropped from the OS. */

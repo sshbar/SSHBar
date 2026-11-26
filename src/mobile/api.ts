@@ -8,6 +8,7 @@ import { MobileSession, type PromptInput } from './session'
 import { MobileFileSync } from './fileSync'
 import { smbChoose, smbList, smbSaved } from './smb'
 import { isSmbPath, parseSmbPath, smbLabel } from '../shared/smbPath'
+import { checkForUpdate } from '../shared/updateCheck'
 
 const notOnAndroid = (what: string) => (): Promise<never> => Promise.reject(new Error(`${what} is not available on Android yet`))
 
@@ -267,6 +268,10 @@ export async function createMobileApi(): Promise<SSHbarApi> {
     clipboard: {
       read: async () => (await Native.clipboardRead()).text,
       write: (text) => Native.clipboardWrite({ text })
+    },
+
+    updates: {
+      check: async () => checkForUpdate((await Native.appInfo()).version, (url, init) => fetch(url, init))
     },
 
     pathForFile: () => '',
