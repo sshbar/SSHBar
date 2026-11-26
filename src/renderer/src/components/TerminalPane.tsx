@@ -94,23 +94,30 @@ export function TerminalPane({ sessionId, visible }: { sessionId: string; visibl
       // Copy / paste: Ctrl+Shift+C/V on Linux & Windows, Cmd+C/V on macOS
       const copy = isMac ? e.metaKey && k === 'c' : e.ctrlKey && e.shiftKey && k === 'c'
       const paste = isMac ? e.metaKey && k === 'v' : e.ctrlKey && e.shiftKey && k === 'v'
+      // Returning false only stops xterm from handling the key; the browser's default action still
+      // runs. For Ctrl+Shift+V that is Chromium's "paste as plain text" into xterm's hidden textarea,
+      // which xterm then pastes again (twice on Linux), so cancel the default for every shortcut we own.
       if (copy) {
+        e.preventDefault()
         const sel = term.getSelection()
         if (sel) void api.clipboard.write(sel)
         return false
       }
       if (paste) {
+        e.preventDefault()
         void api.clipboard.read().then((t) => t && term.paste(t))
         return false
       }
       // Find: Ctrl+Shift+F (Cmd+F on macOS)
       if (isMac ? e.metaKey && !e.shiftKey && k === 'f' : e.ctrlKey && e.shiftKey && k === 'f') {
+        e.preventDefault()
         setSearch((s) => ({ ...s, open: true }))
         requestAnimationFrame(() => searchInput.current?.select())
         return false
       }
       // Snippets: Ctrl+Shift+S (Cmd+Shift+S on macOS)
       if ((isMac ? e.metaKey : e.ctrlKey) && e.shiftKey && k === 's') {
+        e.preventDefault()
         useStore.getState().openPalette(sessionId)
         return false
       }
