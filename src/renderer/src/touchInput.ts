@@ -126,6 +126,8 @@ export function enableSoftKeyboardInput(container: HTMLElement, send: (d: string
     realKey = e.keyCode !== 229
     if (!realKey) e.stopPropagation() // IME placeholder key: the real text arrives as input events
   }
+  // also on focus loss: a key released elsewhere never sends its keyup here, and the soft keyboard
+  // must not be ignored until the next key press
   const onKeyUp = (): void => {
     realKey = false
   }
@@ -176,6 +178,7 @@ export function enableSoftKeyboardInput(container: HTMLElement, send: (d: string
     [IME_RESET, onReset],
     ['keydown', onKeyDown as EventListener],
     ['keyup', onKeyUp],
+    ['focusout', onKeyUp],
     ['compositionstart', onCompositionStart as EventListener],
     ['compositionupdate', onCompositionUpdate as EventListener],
     ['compositionend', onCompositionEnd as EventListener],

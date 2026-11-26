@@ -102,6 +102,14 @@ describe('soft keyboard input', () => {
     expect(h.sent).toEqual(['ok'])
   })
 
+  it('listens to the soft keyboard again when a key is released elsewhere', () => {
+    const h = harness()
+    h.fire({ type: 'keydown', code: 65, key: 'a' })
+    h.fire({ type: 'focusout' }) // focus moved while the key was down: its keyup goes elsewhere
+    h.fire({ type: 'input', inputType: 'insertText', data: 'hi' })
+    expect(h.sent).toEqual(['hi'])
+  })
+
   it('leaves real key presses (hardware keyboards, keyCode != 229) to xterm.js', () => {
     const h = harness()
     h.fire({ type: 'keydown', code: 13, key: 'Enter' })
