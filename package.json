@@ -30,6 +30,7 @@
     "dist:win": "electron-vite build && electron-builder --win",
     "dist:mac": "electron-vite build && electron-builder --mac",
     "test:it": "scripts/it-server.sh >/dev/null && SSHBAR_IT_JUMP=1 SSHBAR_IT_KEYDIR=${SSHBAR_IT_KEYDIR:-$PWD/test/.data} vitest run test/ssh.integration.test.ts",
+    "demo": "electron-vite build && electron scripts/demo.cjs",
     "test:smoke": "electron-vite build && SMOKE_JUMP=1 SMOKE_KEY=${SSHBAR_IT_KEYDIR:-$PWD/test/.data}/id_plain electron --ozone-platform=headless scripts/smoke.cjs",
     "icon": "electron --ozone-platform=headless scripts/make-icon.cjs",
     "dist:dir": "electron-vite build && electron-builder --dir",

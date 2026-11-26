@@ -3,13 +3,15 @@
 #   scripts/it-server.sh        start (prints the env vars to export)
 #   scripts/it-server.sh stop   remove everything
 #
-# sshbar-it         published on 127.0.0.1:2222, TCP forwarding enabled (bastion / port-forward tests)
+# sshbar-it         published on 127.0.0.1:$SSHBAR_IT_PORT (default 2222), TCP forwarding enabled
+#                   (bastion / port-forward tests). Windows may reserve 2222 (Hyper-V): pick another port.
 # sshbar-it-target  NOT published; reachable only as "sb-target:2222" from inside the bastion's network
 set -euo pipefail
 NET=sshbar-it-net
 BASTION=sshbar-it
 TARGET=sshbar-it-target
 DIR="${SSHBAR_IT_KEYDIR:-$(pwd)/test/.data}"
+PORT="${SSHBAR_IT_PORT:-2222}"
 
 if [[ "${1:-}" == "stop" ]]; then
   docker rm -f "$BASTION" "$TARGET" >/dev/null 2>&1 || true
@@ -33,15 +35,15 @@ run() { # name hostname [extra docker args...]
     -e PUBLIC_KEY="$(cat "$DIR/id_plain.pub" "$DIR/id_enc.pub")" \
     lscr.io/linuxserver/openssh-server:latest >/dev/null
 }
-run "$BASTION" sb-bastion -p 127.0.0.1:2222:2222
+run "$BASTION" sb-bastion -p "127.0.0.1:$PORT:2222"
 run "$TARGET" sb-target
 
-for _ in $(seq 1 60); do (echo >/dev/tcp/127.0.0.1/2222) 2>/dev/null && break; sleep 0.5; done
+for _ in $(seq 1 60); do (echo >/dev/tcp/127.0.0.1/$PORT) 2>/dev/null && break; sleep 0.5; done
 for _ in $(seq 1 60); do docker exec "$BASTION" test -f /config/sshd/sshd_config && break; sleep 0.5; done
 sleep 1
 # allow -L / -R / -D and jump-host forwarding on the bastion, then make sshd reload its config
 # (the pattern is anchored so it can't match this sh -c command line itself)
 docker exec "$BASTION" sh -c 'sed -i "s/^AllowTcpForwarding no/AllowTcpForwarding yes/" /config/sshd/sshd_config && kill -HUP $(pgrep -f "^sshd")'
 sleep 1
-for _ in $(seq 1 40); do (echo >/dev/tcp/127.0.0.1/2222) 2>/dev/null && break; sleep 0.5; done
-echo "export SSHBAR_IT_KEYDIR=$DIR SSHBAR_IT_PORT=2222"
+for _ in $(seq 1 40); do (echo >/dev/tcp/127.0.0.1/$PORT) 2>/dev/null && break; sleep 0.5; done
+echo "export SSHBAR_IT_KEYDIR=$DIR SSHBAR_IT_PORT=$PORT"
