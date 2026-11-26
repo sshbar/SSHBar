@@ -246,6 +246,12 @@ export function TerminalPane({ sessionId, visible }: { sessionId: string; visibl
     })
     // the echo of what was typed arrives with the output: only then can the screen confirm it
     const parsedSub = term.onWriteParsed(() => refreshSuggest())
+    // Keys typed in a full-screen program (vim, less, htop: the "q" that quits it) are not on the
+    // shell's line. Start afresh whenever the screen switches, or the next command never matches.
+    const bufferSub = term.buffer.onBufferChange(() => {
+      line.reset()
+      refreshSuggest()
+    })
     const scrollSub = term.onScroll(() => refreshSuggest())
     const onBlur = (): void => showSuggest(null)
     term.textarea?.addEventListener('blur', onBlur)
@@ -291,6 +297,7 @@ export function TerminalPane({ sessionId, visible }: { sessionId: string; visibl
       binSub.dispose()
       resizeSub.dispose()
       parsedSub.dispose()
+      bufferSub.dispose()
       scrollSub.dispose()
       term.textarea?.removeEventListener('blur', onBlur)
       term.textarea?.removeEventListener('focus', onFocus)
