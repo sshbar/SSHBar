@@ -880,6 +880,70 @@ p {
   background: var(--bg-4);
   color: var(--accent);
 }
+/* snippet suggestions next to the cursor */
+.suggest {
+  position: absolute;
+  z-index: 20;
+  width: max-content;
+  min-width: 220px;
+  max-width: min(520px, calc(100% - 8px));
+  padding: 4px;
+  border-radius: 8px;
+  background: var(--bg-3);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 10px 30px #0009;
+  user-select: none;
+}
+.suggest-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  min-width: 0;
+}
+.suggest-item > svg {
+  flex: none;
+  color: var(--text-3);
+}
+.suggest-item.on {
+  background: var(--bg-4);
+}
+.suggest:not(.touch) .suggest-item:hover:not(.on) {
+  background: #ffffff08;
+}
+.suggest-item.on > svg {
+  color: var(--accent);
+}
+.suggest-cmd {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.suggest-name {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.suggest-foot {
+  padding: 4px 8px 2px;
+  color: var(--text-3);
+  font-size: 11px;
+}
+.suggest.touch .suggest-item {
+  padding: 10px 10px;
+}
+.suggest.touch .suggest-item:active {
+  background: var(--bg-4);
+}
+
 .terminal-host {
   flex: 1;
   min-height: 0;

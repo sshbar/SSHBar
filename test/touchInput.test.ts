@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { enableSoftKeyboardInput } from '../src/renderer/src/touchInput'
+import { enableSoftKeyboardInput, restartSoftKeyboard } from '../src/renderer/src/touchInput'
 
 interface Recorded {
   type: string
@@ -29,7 +29,7 @@ function harness() {
     container.dispatchEvent(ev)
     if (!ev.cancelBubble) reachedXterm.push(r.type)
   }
-  return { fire, sent, reachedXterm, dispose }
+  return { fire, sent, reachedXterm, dispose, container }
 }
 
 /** Apply the bytes a shell would receive to a line buffer (DEL = erase one character). */
@@ -67,6 +67,24 @@ describe('soft keyboard input', () => {
     h.fire({ type: 'input', inputType: 'insertText', data: 's -la' })
     h.fire({ type: 'input', inputType: 'insertLineBreak' })
     expect(h.sent.join('')).toBe('ls\x7fs -la\r')
+  })
+
+  it('starts a fresh word after a suggestion was filled in, without erasing it', () => {
+    const h = harness()
+    // a textarea whose blur commits the composition the way some keyboards do: with an empty word
+    const ta = { value: 'up', blur: () => h.fire({ type: 'compositionend', data: '' }), focus: () => undefined }
+    const container = h.container as unknown as { querySelector: () => unknown }
+    container.querySelector = () => ta
+    h.fire({ type: 'compositionstart' })
+    for (const d of ['u', 'up']) h.fire({ type: 'compositionupdate', data: d })
+    h.sent.push('date') // what SSHbar typed itself: "sudo apt up" + "date"
+    restartSoftKeyboard(h.container as unknown as HTMLElement)
+    expect(ta.value).toBe('')
+    h.fire({ type: 'compositionstart' })
+    h.fire({ type: 'compositionupdate', data: 'x' })
+    h.fire({ type: 'compositionend', data: 'x' })
+    expect(shellLine(h.sent)).toBe('updatex')
+    expect(h.sent).not.toContain('\x7f')
   })
 
   it('leaves real key presses (hardware keyboards, keyCode != 229) to xterm.js', () => {

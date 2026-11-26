@@ -270,6 +270,15 @@ export function SettingsView() {
             <input className="mono" defaultValue={s.terminalFontFamily} onBlur={(e) => void update({ terminalFontFamily: e.target.value })} />
           </label>
         </div>
+        <label className="check">
+          <input type="checkbox" checked={s.snippetSuggestions} onChange={(e) => void update({ snippetSuggestions: e.target.checked })} />
+          Suggest matching snippets while typing a command
+        </label>
+        <p className="muted small">
+          {api.platform === 'android'
+            ? 'After 3 letters, tap a suggestion to fill it in. It never runs by itself: press Enter to run it.'
+            : 'After 3 letters, pick one with ↑ ↓ and Enter (or click) to fill it in. It never runs by itself: press Enter again to run it.'}
+        </p>
         <p className="muted small">
           {api.platform === 'android'
             ? 'Use the key row under the terminal for Ctrl, Alt, Esc, Tab, arrows and Paste.'

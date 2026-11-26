@@ -78,9 +78,28 @@ export function enableTouchScroll(el: HTMLElement, term: Terminal, send: (d: str
  * the keyboard revises the word. Non-composed text, Backspace and Enter from the IME are handled too;
  * real key presses (hardware keyboards, keyCode != 229) still go through xterm untouched.
  */
+const IME_RESET = 'sshbar-ime-reset'
+
+/**
+ * After SSHbar typed something itself (a snippet suggestion), make the soft keyboard start a fresh
+ * word. Otherwise it keeps composing the word typed before and may "autocorrect" it later, which would
+ * send Backspaces into the text just filled in. Blur commits the composition (no new text: it was
+ * already sent letter by letter) and the immediate focus keeps the keyboard open.
+ */
+export function restartSoftKeyboard(container: HTMLElement): void {
+  const ta = container.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
+  if (!ta) return
+  container.dispatchEvent(new Event(IME_RESET))
+  ta.blur()
+  ta.value = ''
+  ta.focus({ preventScroll: true })
+}
+
 export function enableSoftKeyboardInput(container: HTMLElement, send: (d: string) => void): () => void {
   let composing = false
   let sent = ''
+  // after restartSoftKeyboard: the word being composed was abandoned, ignore its last events
+  let stale = false
   const textarea = (): HTMLTextAreaElement | null => container.querySelector('.xterm-helper-textarea')
 
   const sync = (text: string): void => {
@@ -106,14 +125,19 @@ export function enableSoftKeyboardInput(container: HTMLElement, send: (d: string
   const onCompositionStart = (e: CompositionEvent): void => {
     e.stopPropagation()
     composing = true
+    stale = false
     sent = ''
   }
   const onCompositionUpdate = (e: CompositionEvent): void => {
     e.stopPropagation()
-    sync(e.data ?? '')
+    if (!stale) sync(e.data ?? '')
   }
   const onCompositionEnd = (e: CompositionEvent): void => {
     e.stopPropagation()
+    if (stale) {
+      stale = false
+      return
+    }
     sync(e.data ?? '')
     composing = false
     sent = ''
@@ -123,14 +147,23 @@ export function enableSoftKeyboardInput(container: HTMLElement, send: (d: string
   const onInput = (e: Event): void => {
     const ev = e as InputEvent
     e.stopPropagation()
-    if (composing || ev.inputType === 'insertCompositionText') return
+    if (composing || stale || ev.inputType === 'insertCompositionText') return
     if (ev.inputType === 'insertText' && ev.data) send(ev.data)
     else if (ev.inputType === 'deleteContentBackward') send('\x7f')
     else if (ev.inputType === 'insertLineBreak' || ev.inputType === 'insertParagraph') send('\r')
     resetSoon()
   }
 
+  const onReset = (): void => {
+    stale = composing
+    composing = false
+    sent = ''
+    // blur ends the composition synchronously; never let a missing event swallow later typing
+    if (stale) setTimeout(() => (stale = false), 300)
+  }
+
   const listeners: [string, EventListener][] = [
+    [IME_RESET, onReset],
     ['keydown', onKeyDown as EventListener],
     ['compositionstart', onCompositionStart as EventListener],
     ['compositionupdate', onCompositionUpdate as EventListener],

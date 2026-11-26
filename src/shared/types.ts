@@ -89,6 +89,8 @@ export interface Settings {
   terminalScrollback: number
   terminalCursorStyle: 'block' | 'bar' | 'underline'
   statsIntervalSec: number
+  /** offer matching snippets while typing a command in the terminal */
+  snippetSuggestions: boolean
   /** look for a newer release on GitHub when the app starts */
   checkForUpdates: boolean
   /** release the user chose to skip: no startup notice for it (a later one still shows) */

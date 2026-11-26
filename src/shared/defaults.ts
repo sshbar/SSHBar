@@ -33,6 +33,7 @@ export const DEFAULT_SETTINGS: Settings = {
   terminalScrollback: 10000,
   terminalCursorStyle: 'block',
   statsIntervalSec: 3,
+  snippetSuggestions: true,
   checkForUpdates: true,
   skippedUpdate: '',
   sync: {
