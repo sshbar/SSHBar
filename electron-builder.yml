@@ -30,7 +30,8 @@ linux:
     - target: deb
       arch: [x64]
   category: Network
-  icon: build/icon.png
+  # the hicolor sizes (scripts/make-icon.cjs): a lone 1024x1024 icon is never found by Linux desktops
+  icon: build/icons
   synopsis: SSH client with SFTP, live stats and Proton Pass integration
   description: Cross-platform SSH client with a file manager, port forwarding, jump hosts, live server stats and Proton Pass integration.
   maintainer: Nicolae Orlov <contact@nicuorlov.com>
